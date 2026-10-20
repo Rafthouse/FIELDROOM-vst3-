@@ -3,207 +3,260 @@
 
 namespace fieldroom {
 
-const juce::Colour CustomLookAndFeel::darkCharcoal     = juce::Colour(0xff121316);
-const juce::Colour CustomLookAndFeel::panelBackground  = juce::Colour(0xff181a1f);
-const juce::Colour CustomLookAndFeel::metalBorder      = juce::Colour(0xff2d3139);
-const juce::Colour CustomLookAndFeel::accentAmber      = juce::Colour(0xffc4a46e);
-const juce::Colour CustomLookAndFeel::accentCyan       = juce::Colour(0xff36b9d4);
-const juce::Colour CustomLookAndFeel::textMuted        = juce::Colour(0xff8a909d);
-const juce::Colour CustomLookAndFeel::textBright       = juce::Colour(0xfff0f2f5);
+const juce::Colour CustomLookAndFeel::bgObsidian       = juce::Colour(0xff121618);
+const juce::Colour CustomLookAndFeel::panelSurface     = juce::Colour(0xff161b1d);
+const juce::Colour CustomLookAndFeel::panelRaised      = juce::Colour(0xff202729);
+const juce::Colour CustomLookAndFeel::panelMilled      = juce::Colour(0xff1a2123);
+const juce::Colour CustomLookAndFeel::metalBorder      = juce::Colour(0xff2a3437);
+const juce::Colour CustomLookAndFeel::metalBorderLight = juce::Colour(0xff3d4a4e);
+const juce::Colour CustomLookAndFeel::accentGold       = juce::Colour(0xffc4a46e);
+const juce::Colour CustomLookAndFeel::accentGoldBright = juce::Colour(0xffe5c992);
+const juce::Colour CustomLookAndFeel::accentGoldDark   = juce::Colour(0xff8a6e3d);
+const juce::Colour CustomLookAndFeel::accentCyan       = juce::Colour(0xff83adb4);
+const juce::Colour CustomLookAndFeel::ledGreen         = juce::Colour(0xff22c55e);
+const juce::Colour CustomLookAndFeel::ledAmber         = juce::Colour(0xfff59e0b);
+const juce::Colour CustomLookAndFeel::ledRed           = juce::Colour(0xffef4444);
+const juce::Colour CustomLookAndFeel::textBright       = juce::Colour(0xffe5e8e3);
+const juce::Colour CustomLookAndFeel::textMuted        = juce::Colour(0xff9ca9a7);
+const juce::Colour CustomLookAndFeel::textDim          = juce::Colour(0xff647371);
 
-namespace {
+CustomLookAndFeel::CustomLookAndFeel() {
+    setColour(juce::ResizableWindow::backgroundColourId, bgObsidian);
+    setColour(juce::ComboBox::backgroundColourId, panelMilled);
+    setColour(juce::ComboBox::textColourId, textBright);
+    setColour(juce::ComboBox::outlineColourId, metalBorder);
+    setColour(juce::ComboBox::arrowColourId, accentCyan);
+    setColour(juce::PopupMenu::backgroundColourId, panelRaised);
+    setColour(juce::PopupMenu::textColourId, textBright);
+    setColour(juce::PopupMenu::highlightedBackgroundColourId, panelMilled);
+    setColour(juce::PopupMenu::highlightedTextColourId, accentGold);
+    setColour(juce::TextButton::textColourOffId, textMuted);
+    setColour(juce::TextButton::textColourOnId, accentGold);
+}
 
-void drawSoftShadow (juce::Graphics& g, juce::Point<float> centre, float radius)
-{
-    // Layered ambient occlusion / soft drop shadow beneath the knob body.
-    for (int i = 6; i >= 1; --i)
-    {
-        const float spread = radius + (float) i * 2.0f;
-        const float alpha  = 0.030f + (float) (6 - i) * 0.012f;
-        g.setColour (juce::Colours::black.withAlpha (alpha));
-        g.fillEllipse (centre.x - spread, centre.y - spread + (float) i * 0.8f,
-                       spread * 2.0f, spread * 2.0f);
+void CustomLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y, int width, int height,
+                                         float sliderPosProportional, float rotaryStartAngle,
+                                         float rotaryEndAngle, juce::Slider& slider) {
+    juce::ignoreUnused(slider);
+    auto bounds = juce::Rectangle<int>(x, y, width, height).toFloat().reduced(4.0f);
+    auto radius = juce::jmin(bounds.getWidth(), bounds.getHeight()) / 2.0f;
+    auto center = bounds.getCentre();
+    auto toAngle = rotaryStartAngle + sliderPosProportional * (rotaryEndAngle - rotaryStartAngle);
+
+    // 1. Ambient Drop Shadow (Soft multi-layer dark blur)
+    for (int i = 3; i >= 1; --i) {
+        float shadowRadius = radius + static_cast<float>(i) * 1.5f;
+        g.setColour(juce::Colours::black.withAlpha(0.18f / static_cast<float>(i)));
+        g.fillEllipse(center.x - shadowRadius, center.y - shadowRadius + 1.5f,
+                      shadowRadius * 2.0f, shadowRadius * 2.0f);
     }
-}
 
-void drawMilledBezel (juce::Graphics& g, juce::Point<float> centre, float outerRadius)
-{
-    const auto inner = outerRadius - 3.0f;
+    // 2. Milled Outer Bezel (Aluminum chamfer)
+    juce::ColourGradient bezelGrad(panelMilled.brighter(0.15f), center.x - radius, center.y - radius,
+                                   panelMilled.darker(0.3f), center.x + radius, center.y + radius, false);
+    g.setGradientFill(bezelGrad);
+    g.fillEllipse(center.x - radius, center.y - radius, radius * 2.0f, radius * 2.0f);
 
-    // Brushed aluminium bezel: light top-left, dark bottom-right.
-    juce::ColourGradient bezel (juce::Colour (0xff9aa0aa), centre.x - outerRadius * 0.55f, centre.y - outerRadius * 0.75f,
-                                juce::Colour (0xff34383f), centre.x + outerRadius * 0.55f, centre.y + outerRadius * 0.65f, false);
-    bezel.addColour (0.45, juce::Colour (0xff5d626b));
-    g.setGradientFill (bezel);
-    g.fillEllipse (centre.x - outerRadius, centre.y - outerRadius, outerRadius * 2.0f, outerRadius * 2.0f);
+    g.setColour(metalBorderLight.withAlpha(0.7f));
+    g.drawEllipse(center.x - radius, center.y - radius, radius * 2.0f, radius * 2.0f, 1.0f);
 
-    // Specular rim on the top edge of the bezel.
-    g.setColour (juce::Colours::white.withAlpha (0.16f));
-    juce::Path rim;
-    rim.addCentredArc (centre.x, centre.y, outerRadius - 0.5f, outerRadius - 0.5f, 0.0f,
-                       juce::MathConstants<float>::pi * 1.05f, juce::MathConstants<float>::pi * 1.95f, true);
-    g.strokePath (rim, juce::PathStrokeType (1.1f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
-
-    // Recessed step between bezel and cap.
-    g.setColour (juce::Colour (0xff0c0d10));
-    g.drawEllipse (centre.x - inner, centre.y - inner, inner * 2.0f, inner * 2.0f, 1.6f);
-}
-
-void drawKnurling (juce::Graphics& g, juce::Point<float> centre, float radius, int ticks)
-{
-    // Radial knurling machined into the cap edge.
-    for (int i = 0; i < ticks; ++i)
-    {
-        const float angle = juce::MathConstants<float>::twoPi * (float) i / (float) ticks;
-        const auto dir = juce::Point<float> (std::cos (angle), std::sin (angle));
-        const auto a = centre + dir * (radius * 0.90f);
-        const auto b = centre + dir * (radius * 0.975f);
-
-        g.setColour (juce::Colours::white.withAlpha (0.10f));
-        g.drawLine ({ a.x - 0.5f, a.y - 0.5f, b.x - 0.5f, b.y - 0.5f }, 0.7f);
-        g.setColour (juce::Colours::black.withAlpha (0.35f));
-        g.drawLine ({ a.x + 0.5f, a.y + 0.5f, b.x + 0.5f, b.y + 0.5f }, 0.7f);
-    }
-}
-
-void drawGlassGlare (juce::Graphics& g, juce::Point<float> centre, float radius)
-{
-    // Curved lens highlight across the upper third of the cap.
-    const auto glare = juce::Rectangle<float> (centre.x - radius * 0.78f, centre.y - radius * 0.92f,
-                                               radius * 1.56f, radius * 0.92f);
-
-    juce::ColourGradient sheen (juce::Colours::white.withAlpha (0.26f), glare.getCentreX(), glare.getY(),
-                                juce::Colours::white.withAlpha (0.0f), glare.getCentreX(), glare.getBottom(), false);
-    g.setGradientFill (sheen);
-    g.fillEllipse (glare);
-}
-
-} // namespace
-
-CustomLookAndFeel::CustomLookAndFeel()
-{
-    setColour (juce::ResizableWindow::backgroundColourId, darkCharcoal);
-    setColour (juce::Slider::rotarySliderFillColourId, accentAmber);
-    setColour (juce::Slider::thumbColourId, accentAmber);
-    setColour (juce::ComboBox::backgroundColourId, juce::Colour (0xff20232a));
-    setColour (juce::ComboBox::outlineColourId, metalBorder);
-    setColour (juce::ComboBox::textColourId, textBright);
-    setColour (juce::TextButton::buttonColourId, juce::Colour (0xff22252c));
-    setColour (juce::TextButton::textColourOffId, textBright);
-}
-
-void CustomLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int width, int height,
-                                          float sliderPosProportional, float rotaryStartAngle,
-                                          float rotaryEndAngle, juce::Slider& slider)
-{
-    auto bounds = juce::Rectangle<int> (x, y, width, height).toFloat().reduced (3.0f);
-    const auto radius = juce::jmin (bounds.getWidth(), bounds.getHeight()) * 0.5f;
-    const auto centre = bounds.getCentre();
-    const auto toAngle = rotaryStartAngle + sliderPosProportional * (rotaryEndAngle - rotaryStartAngle);
-
-    drawSoftShadow (g, centre, radius);
-    drawMilledBezel (g, centre, radius);
-
-    const auto capRadius = radius - 8.0f;
-
-    // Darkened cap with a soft radial falloff.
-    juce::ColourGradient cap (juce::Colour (0xff3a3e46), centre.x, centre.y - capRadius * 0.6f,
-                              juce::Colour (0xff15171b), centre.x, centre.y + capRadius, true);
-    g.setGradientFill (cap);
-    g.fillEllipse (centre.x - capRadius, centre.y - capRadius, capRadius * 2.0f, capRadius * 2.0f);
-
-    drawKnurling (g, centre, capRadius, 72);
-
-    // Recessed arc groove.
-    const auto arcRadius = capRadius - 6.0f;
-    juce::Path groove;
-    groove.addCentredArc (centre.x, centre.y, arcRadius, arcRadius, 0.0f,
+    // 3. Recessed Arc Track (Background dark groove)
+    auto trackRadius = radius - 5.5f;
+    juce::Path bgTrack;
+    bgTrack.addCentredArc(center.x, center.y, trackRadius, trackRadius, 0.0f,
                           rotaryStartAngle, rotaryEndAngle, true);
-    g.setColour (juce::Colour (0xff0b0c0e));
-    g.strokePath (groove, juce::PathStrokeType (4.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+    g.setColour(juce::Colour(0xff0e1214));
+    g.strokePath(bgTrack, juce::PathStrokeType(4.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+    g.setColour(metalBorder.withAlpha(0.5f));
+    g.strokePath(bgTrack, juce::PathStrokeType(1.0f));
 
-    // LED arc in champagne gold, with a glow pass.
-    if (slider.isEnabled())
-    {
-        juce::Path active;
-        active.addCentredArc (centre.x, centre.y, arcRadius, arcRadius, 0.0f,
-                              rotaryStartAngle, toAngle, true);
+    // 4. Glowing Active Value Arc (Champagne Gold / Phosphor Cyan)
+    if (sliderPosProportional > 0.001f) {
+        juce::Path activeTrack;
+        activeTrack.addCentredArc(center.x, center.y, trackRadius, trackRadius, 0.0f,
+                                 rotaryStartAngle, toAngle, true);
 
-        g.setColour (accentAmber.withAlpha (0.22f));
-        g.strokePath (active, juce::PathStrokeType (9.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        // Soft bloom around track
+        g.setColour(accentGold.withAlpha(0.25f));
+        g.strokePath(activeTrack, juce::PathStrokeType(6.5f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
-        g.setColour (accentAmber);
-        g.strokePath (active, juce::PathStrokeType (3.2f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        // Core bright track
+        juce::ColourGradient arcGrad(accentGoldDark, center.x - trackRadius, center.y + trackRadius,
+                                     accentGoldBright, center.x + trackRadius, center.y - trackRadius, false);
+        g.setGradientFill(arcGrad);
+        g.strokePath(activeTrack, juce::PathStrokeType(3.5f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
     }
 
-    // Pointer notch.
-    const auto pointer = centre.getPointOnCircumference (capRadius * 0.62f, toAngle);
-    g.setColour (juce::Colour (0xffe8e2d2).withAlpha (slider.isEnabled() ? 0.92f : 0.35f));
-    g.drawLine ({ centre.x + (pointer.x - centre.x) * 0.42f, centre.y + (pointer.y - centre.y) * 0.42f,
-                  pointer.x, pointer.y }, 2.4f);
+    // 5. Knob Body (Milled Dark Anodized Aluminum with concentric knurling)
+    auto knobRadius = radius - 10.0f;
+    juce::ColourGradient knobGrad(panelRaised.brighter(0.08f), center.x, center.y - knobRadius,
+                                  panelMilled.darker(0.35f), center.x, center.y + knobRadius, false);
+    g.setGradientFill(knobGrad);
+    g.fillEllipse(center.x - knobRadius, center.y - knobRadius, knobRadius * 2.0f, knobRadius * 2.0f);
 
-    drawGlassGlare (g, centre, capRadius);
+    // Fine concentric knurling groove
+    g.setColour(metalBorder.withAlpha(0.6f));
+    g.drawEllipse(center.x - (knobRadius - 2.0f), center.y - (knobRadius - 2.0f),
+                  (knobRadius - 2.0f) * 2.0f, (knobRadius - 2.0f) * 2.0f, 0.8f);
+
+    // 6. Specular Curved Glass Glare (Upper hemisphere luxury sheen)
+    juce::Path glassGlare;
+    glassGlare.addCentredArc(center.x, center.y, knobRadius - 1.0f, knobRadius - 1.0f,
+                            0.0f, -juce::MathConstants<float>::pi * 0.75f,
+                            -juce::MathConstants<float>::pi * 0.25f, true);
+    g.setColour(juce::Colours::white.withAlpha(0.12f));
+    g.strokePath(glassGlare, juce::PathStrokeType(1.5f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+
+    // 7. Precision Pointer Indicator (Illuminated line with gold LED point)
+    auto innerPoint = center.getPointOnCircumference(knobRadius * 0.28f, toAngle);
+    auto outerPoint = center.getPointOnCircumference(knobRadius * 0.76f, toAngle);
+
+    // Needle shadow
+    g.setColour(juce::Colours::black.withAlpha(0.5f));
+    g.drawLine(innerPoint.x + 0.5f, innerPoint.y + 1.0f, outerPoint.x + 0.5f, outerPoint.y + 1.0f, 2.0f);
+
+    // Needle body
+    g.setColour(accentGoldBright);
+    g.drawLine(innerPoint.x, innerPoint.y, outerPoint.x, outerPoint.y, 2.0f);
+
+    // Needle glowing tip dot
+    g.setColour(accentGold);
+    g.fillEllipse(outerPoint.x - 1.5f, outerPoint.y - 1.5f, 3.0f, 3.0f);
+
+    // 8. Recessed Center Screw Cap
+    auto capRadius = knobRadius * 0.26f;
+    g.setColour(juce::Colour(0xff101416));
+    g.fillEllipse(center.x - capRadius, center.y - capRadius, capRadius * 2.0f, capRadius * 2.0f);
+    g.setColour(metalBorderLight.withAlpha(0.4f));
+    g.drawEllipse(center.x - capRadius, center.y - capRadius, capRadius * 2.0f, capRadius * 2.0f, 0.8f);
 }
 
-void CustomLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Button& button,
-                                              const juce::Colour& backgroundColour,
-                                              bool shouldDrawButtonAsHighlighted,
-                                              bool shouldDrawButtonAsDown)
-{
-    auto bounds = button.getLocalBounds().toFloat().reduced (1.0f);
-    const auto corner = 6.0f;
+void CustomLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button& button,
+                                             const juce::Colour& backgroundColour,
+                                             bool shouldDrawButtonAsHighlighted,
+                                             bool shouldDrawButtonAsDown) {
+    juce::ignoreUnused(backgroundColour);
+    auto bounds = button.getLocalBounds().toFloat().reduced(0.5f);
+    bool isToggled = button.getToggleState();
 
-    // Segmented tactile switch: raised when off, inset when on.
-    juce::Colour top = backgroundColour.brighter (0.10f);
-    juce::Colour bottom = backgroundColour.darker (0.35f);
+    // 1. Button Background Gradient
+    if (isToggled || shouldDrawButtonAsDown) {
+        juce::ColourGradient activeGrad(panelMilled.darker(0.2f), bounds.getX(), bounds.getY(),
+                                       panelRaised.brighter(0.04f), bounds.getX(), bounds.getBottom(), false);
+        g.setGradientFill(activeGrad);
+        g.fillRoundedRectangle(bounds, 3.5f);
 
-    if (button.getToggleState())
-    {
-        top = backgroundColour.darker (0.20f);
-        bottom = backgroundColour.brighter (0.04f);
-    }
-    if (shouldDrawButtonAsDown)
-    {
-        top = backgroundColour.darker (0.30f);
-        bottom = backgroundColour.darker (0.10f);
-    }
+        g.setColour(accentGold.withAlpha(0.85f));
+        g.drawRoundedRectangle(bounds, 3.5f, 1.2f);
 
-    g.setGradientFill (juce::ColourGradient (top, bounds.getCentreX(), bounds.getY(),
-                                             bottom, bounds.getCentreX(), bounds.getBottom(), false));
-    g.fillRoundedRectangle (bounds, corner);
+        g.setColour(accentGold.withAlpha(0.22f));
+        g.drawRoundedRectangle(bounds.expanded(1.0f), 4.5f, 1.0f);
+    } else {
+        juce::Colour topCol = shouldDrawButtonAsHighlighted ? panelRaised.brighter(0.12f) : panelRaised;
+        juce::Colour botCol = shouldDrawButtonAsHighlighted ? panelMilled.brighter(0.05f) : panelMilled;
 
-    g.setColour (juce::Colours::black.withAlpha (button.getToggleState() ? 0.55f : 0.35f));
-    g.drawRoundedRectangle (bounds, corner, 1.2f);
+        juce::ColourGradient idleGrad(topCol, bounds.getX(), bounds.getY(),
+                                     botCol, bounds.getX(), bounds.getBottom(), false);
+        g.setGradientFill(idleGrad);
+        g.fillRoundedRectangle(bounds, 3.5f);
 
-    if (! button.getToggleState())
-    {
-        g.setColour (juce::Colours::white.withAlpha (shouldDrawButtonAsHighlighted ? 0.14f : 0.07f));
-        g.drawLine (bounds.getX() + corner, bounds.getY() + 1.0f,
-                    bounds.getRight() - corner, bounds.getY() + 1.0f, 1.0f);
+        g.setColour(metalBorderLight.withAlpha(shouldDrawButtonAsHighlighted ? 0.9f : 0.45f));
+        g.drawLine(bounds.getX() + 2.0f, bounds.getY() + 0.5f, bounds.getRight() - 2.0f, bounds.getY() + 0.5f, 1.0f);
+
+        g.setColour(shouldDrawButtonAsHighlighted ? metalBorderLight : metalBorder);
+        g.drawRoundedRectangle(bounds, 3.5f, 1.0f);
     }
 }
 
-void CustomLookAndFeel::drawComboBox (juce::Graphics& g, int width, int height, bool isButtonDown,
-                                      int buttonX, int buttonY, int buttonW, int buttonH,
-                                      juce::ComboBox& box)
-{
-    auto bounds = juce::Rectangle<int> (0, 0, width, height).toFloat().reduced (0.5f);
-    g.setGradientFill (juce::ColourGradient (juce::Colour (0xff262a31), 0.0f, 0.0f,
-                                             juce::Colour (0xff171a1f), 0.0f, (float) height, false));
-    g.fillRoundedRectangle (bounds, 5.0f);
-    g.setColour (metalBorder);
-    g.drawRoundedRectangle (bounds, 5.0f, 1.0f);
+void CustomLookAndFeel::drawButtonText(juce::Graphics& g, juce::TextButton& button,
+                                       bool shouldDrawButtonAsHighlighted,
+                                       bool shouldDrawButtonAsDown) {
+    juce::ignoreUnused(shouldDrawButtonAsDown);
+    auto bounds = button.getLocalBounds();
+    bool isToggled = button.getToggleState();
 
+    juce::Colour textCol = textMuted;
+    if (isToggled) {
+        textCol = accentGoldBright;
+    } else if (shouldDrawButtonAsHighlighted) {
+        textCol = textBright;
+    }
+
+    g.setColour(textCol);
+    g.setFont(juce::Font(11.0f, isToggled ? juce::Font::bold : juce::Font::plain));
+    g.drawFittedText(button.getButtonText(), bounds, juce::Justification::centred, 1);
+}
+
+void CustomLookAndFeel::drawComboBox(juce::Graphics& g, int width, int height, bool isButtonDown,
+                                     int buttonX, int buttonY, int buttonW, int buttonH,
+                                     juce::ComboBox& box) {
+    juce::ignoreUnused(isButtonDown, buttonX, buttonY, buttonW, buttonH, box);
+    auto bounds = juce::Rectangle<int>(0, 0, width, height).toFloat().reduced(0.5f);
+
+    g.setColour(panelMilled);
+    g.fillRoundedRectangle(bounds, 3.0f);
+
+    g.setColour(metalBorder);
+    g.drawRoundedRectangle(bounds, 3.0f, 1.0f);
+
+    float arrowX = static_cast<float>(width) - 16.0f;
+    float arrowY = static_cast<float>(height) * 0.5f - 2.0f;
     juce::Path arrow;
-    const auto cx = (float) (buttonX + buttonW / 2);
-    const auto cy = (float) (buttonY + buttonH / 2);
-    arrow.startNewSubPath (cx - 4.5f, cy - 2.0f);
-    arrow.lineTo (cx, cy + 3.0f);
-    arrow.lineTo (cx + 4.5f, cy - 2.0f);
-    g.setColour (textMuted);
-    g.strokePath (arrow, juce::PathStrokeType (1.4f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+    arrow.startNewSubPath(arrowX, arrowY);
+    arrow.lineTo(arrowX + 4.0f, arrowY + 4.5f);
+    arrow.lineTo(arrowX + 8.0f, arrowY);
 
-    juce::ignoreUnused (isButtonDown);
+    g.setColour(accentCyan);
+    g.strokePath(arrow, juce::PathStrokeType(1.6f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+}
+
+void CustomLookAndFeel::drawPopupMenuBackground(juce::Graphics& g, int width, int height) {
+    auto bounds = juce::Rectangle<int>(0, 0, width, height).toFloat().reduced(0.5f);
+
+    g.setColour(panelRaised);
+    g.fillRoundedRectangle(bounds, 4.0f);
+
+    g.setColour(metalBorderLight);
+    g.drawRoundedRectangle(bounds, 4.0f, 1.0f);
+}
+
+void CustomLookAndFeel::drawPopupMenuItem(juce::Graphics& g, const juce::Rectangle<int>& area,
+                                          bool isSeparator, bool isActive, bool isHighlighted,
+                                          bool isTicked, bool hasSubMenu, const juce::String& text,
+                                          const juce::String& shortcutKeyText,
+                                          const juce::Drawable* icon, const juce::Colour* textColour) {
+    juce::ignoreUnused(hasSubMenu, shortcutKeyText, icon, textColour);
+
+    if (isSeparator) {
+        g.setColour(metalBorder);
+        g.drawLine(static_cast<float>(area.getX() + 8), static_cast<float>(area.getCentreY()),
+                   static_cast<float>(area.getRight() - 8), static_cast<float>(area.getCentreY()), 1.0f);
+        return;
+    }
+
+    auto itemBounds = area.toFloat().reduced(2.0f, 1.0f);
+
+    if (isHighlighted && isActive) {
+        g.setColour(panelMilled.brighter(0.1f));
+        g.fillRoundedRectangle(itemBounds, 3.0f);
+        g.setColour(accentGold.withAlpha(0.6f));
+        g.drawRoundedRectangle(itemBounds, 3.0f, 1.0f);
+    }
+
+    juce::Colour col = textBright;
+    if (!isActive) col = textDim;
+    else if (isHighlighted) col = accentGoldBright;
+
+    g.setColour(col);
+    g.setFont(juce::Font(12.0f, juce::Font::plain));
+
+    auto textArea = area.reduced(12, 0);
+    if (isTicked) {
+        g.setColour(accentGold);
+        g.fillEllipse(static_cast<float>(area.getX() + 4), static_cast<float>(area.getCentreY() - 2), 4.0f, 4.0f);
+    }
+
+    g.drawFittedText(text, textArea, juce::Justification::centredLeft, 1);
 }
 
 } // namespace fieldroom

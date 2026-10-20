@@ -1,5 +1,6 @@
 #include "HeadphoneCalibration.h"
 #include <algorithm>
+#include <cstdio>
 #include <cstring>
 #include <cmath>
 
@@ -339,15 +340,7 @@ std::vector<HeadphoneProfile> HeadphoneCalibration::getBundledProfiles() {
         list.push_back(p);
     }
 
-    // 11. V-MODA M-200 (wired/passive)
-    // Acoustic & Driver Provenance Note:
-    // The original wired, passive M-200 features 50mm CCAW neodymium drivers tuned for studio monitoring,
-    // differing substantially in frequency response, fit dependence, and acoustic impedance from
-    // the M-200 ANC active Bluetooth model and the consumer/DJ Crossfade series (M-100, M-100 Master).
-    // Calibration status is registered as CalibrationPending ('CALIBRATION_PENDING') with neutral pass-through (empty bands, 0 dBFS preamp).
-    // Strict calibration safety policy prohibits loading unverified EQ coefficients pending standardized test measurements
-    // on a calibrated fixture (GRAS 43AG / IEC 60318-4).
-    // 12. V-MODA M-200
+    // 11. V-MODA M-200
     {
         HeadphoneProfile p;
         p.id = "vmoda_m200_wired";
@@ -461,8 +454,7 @@ void HeadphoneCalibration::prepareAndPublishState(int profileIdx, bool enabled, 
 
     // Prepare state in private write slot of triple buffer
     PreparedCalibrationState& state = statePool[writeIndex];
-    std::strncpy(state.profileId, profile.id.c_str(), sizeof(state.profileId) - 1);
-    state.profileId[sizeof(state.profileId) - 1] = '\0';
+    std::snprintf(state.profileId, sizeof(state.profileId), "%s", profile.id.c_str());
     state.profileIndex = clampedIdx;
     state.status = profile.status;
     state.calibrationEnabled = enabled;
@@ -488,8 +480,6 @@ void HeadphoneCalibration::prepareAndPublishState(int profileIdx, bool enabled, 
     }
 
     // Compute Left and Right Channel Biquads
-    // Crucial safety guarantee: if status is not VerifiedCalibrated (e.g. CalibrationPending),
-    // strictly prohibit assigning unverified EQ coefficients.
     if (profile.status != CalibrationStatus::VerifiedCalibrated) {
         state.numBandsL = 0;
         state.numBandsR = 0;
@@ -527,10 +517,9 @@ void HeadphoneCalibration::prepareAndPublishState(int profileIdx, bool enabled, 
 }
 
 void HeadphoneCalibration::activateNewState(const PreparedCalibrationState& newState) noexcept {
-    // If not crossfading, prepare pending bank and start crossfade
     pendingBank = 1 - activeBank;
     banks[pendingBank].state = newState;
-    banks[pendingBank].currentPreampL = banks[activeBank].currentPreampL; // smooth gain transition
+    banks[pendingBank].currentPreampL = banks[activeBank].currentPreampL;
     banks[pendingBank].currentPreampR = banks[activeBank].currentPreampR;
     banks[pendingBank].reset();
 
@@ -549,7 +538,6 @@ void HeadphoneCalibration::process(float* leftChannel, float* rightChannel, int 
     }
 
     if (!isCrossfading) {
-        // Fast path: single active filter bank
         auto& bank = banks[activeBank];
         for (int n = 0; n < numSamples; ++n) {
             float outL = 0.0f, outR = 0.0f;
@@ -558,11 +546,11 @@ void HeadphoneCalibration::process(float* leftChannel, float* rightChannel, int 
             rightChannel[n] = outR;
         }
     } else {
-        // Click-free crossfading path: smoothly interpolate between active and pending banks
         auto& oldBank = banks[activeBank];
         auto& newBank = banks[pendingBank];
 
-        for (int n = 0; n < numSamples; ++n) {
+        int n = 0;
+        for (; n < numSamples; ++n) {
             float oldL = 0.0f, oldR = 0.0f;
             float newL = 0.0f, newR = 0.0f;
 
@@ -578,16 +566,19 @@ void HeadphoneCalibration::process(float* leftChannel, float* rightChannel, int 
                 isCrossfading = false;
                 activeBank = pendingBank;
                 pendingBank = 1 - activeBank;
+                ++n;
                 break;
             }
         }
 
-        // If crossfade completed mid-block, process remainder through active bank
-        if (!isCrossfading) {
+        // Process any remaining samples in the block through the newly active bank
+        if (!isCrossfading && n < numSamples) {
             auto& bank = banks[activeBank];
-            for (int n = 0; n < numSamples; ++n) {
-                // If this point was reached after crossfade finished in the same block,
-                // the loop above finished. Any subsequent samples run through standard path.
+            for (; n < numSamples; ++n) {
+                float outL = 0.0f, outR = 0.0f;
+                bank.process(leftChannel[n], rightChannel[n], outL, outR, gainSmoothingCoeff);
+                leftChannel[n] = outL;
+                rightChannel[n] = outR;
             }
         }
     }

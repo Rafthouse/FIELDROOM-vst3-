@@ -21,6 +21,7 @@ enum class RoomProfile : int {
 
 struct ParameterIDs {
     static constexpr const char* speakerField = "speaker_field";
+    static constexpr const char* speakerSpread = "speaker_spread";
     static constexpr const char* roomProfile = "room_profile";
     static constexpr const char* roomAmount = "room_amount";
     static constexpr const char* headRotation = "head_rotation";

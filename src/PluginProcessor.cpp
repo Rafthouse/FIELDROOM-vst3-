@@ -90,6 +90,9 @@ void FieldroomAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juc
     const int roomProfileIdx = static_cast<int>(apvts.getRawParameterValue(ParameterIDs::roomProfile)->load());
     const float roomAmount = apvts.getRawParameterValue(ParameterIDs::roomAmount)->load();
     const float headRotation = apvts.getRawParameterValue(ParameterIDs::headRotation)->load();
+    const float speakerSpread = (apvts.getRawParameterValue(ParameterIDs::speakerSpread) != nullptr)
+                                    ? apvts.getRawParameterValue(ParameterIDs::speakerSpread)->load()
+                                    : 60.0f;
     const bool loudnessMatch = apvts.getRawParameterValue(ParameterIDs::loudnessMatch)->load() > 0.5f;
 
     const int monitoringModeIdx = static_cast<int>(apvts.getRawParameterValue(ParameterIDs::monitoringMode)->load());
@@ -103,8 +106,9 @@ void FieldroomAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juc
 
     // If "Headphone EQ Only" is engaged, skip room & binaural processing
     if (!eqOnly) {
-        // 1. Binaural Virtual Loudspeaker Rendering (Distance, 2x2 Matrix, ITD/ILD, Head Rotation)
+        // 1. Binaural Virtual Loudspeaker Rendering (Distance, 2x2 Matrix, ITD/ILD, Head Rotation, Spread)
         binauralRenderer.setSpeakerField(speakerFieldIdx);
+        binauralRenderer.setSpeakerSpread(speakerSpread);
         binauralRenderer.setHeadRotation(headRotation);
         binauralRenderer.setLoudnessMatch(loudnessMatch);
         binauralRenderer.process(channelL, channelR, channelL, channelR, numSamples);

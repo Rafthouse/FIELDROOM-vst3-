@@ -1,16 +1,25 @@
 #include "Parameters.h"
+#include "../DSP/HeadphoneCalibration.h"
 
 namespace fieldroom {
 
 juce::AudioProcessorValueTreeState::ParameterLayout ParameterManager::createParameterLayout() {
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
 
-    // Speaker Field: Near (0), Mid (1), Far (2)
     layout.add(std::make_unique<juce::AudioParameterChoice>(
         juce::ParameterID(ParameterIDs::speakerField, 1),
         "Speaker Field",
         juce::StringArray{"Nearfield", "Midfield", "Farfield"},
         1 // Default Midfield
+    ));
+
+    // Speaker Spread Angle: 30 deg to 110 deg (default 60 deg ITU equilateral)
+    layout.add(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID(ParameterIDs::speakerSpread, 1),
+        "Speaker Spread",
+        juce::NormalisableRange<float>(30.0f, 110.0f, 0.5f),
+        60.0f,
+        juce::AudioParameterFloatAttributes().withLabel("deg")
     ));
 
     // Room Profile
@@ -44,11 +53,20 @@ juce::AudioProcessorValueTreeState::ParameterLayout ParameterManager::createPara
         juce::AudioParameterFloatAttributes().withLabel("deg")
     ));
 
-    // Headphone Model index (0: Generic / Raw, 1..N: Calibrated models)
-    layout.add(std::make_unique<juce::AudioParameterInt>(
+    // Headphone Model Choice (1-to-1 mapping with bundled profiles)
+    juce::StringArray headphoneChoices;
+    for (const auto& profile : HeadphoneCalibration::getBundledProfiles()) {
+        headphoneChoices.add(profile.manufacturer + " " + profile.model);
+    }
+    if (headphoneChoices.isEmpty()) {
+        headphoneChoices.add("Sennheiser HD 600");
+    }
+
+    layout.add(std::make_unique<juce::AudioParameterChoice>(
         juce::ParameterID(ParameterIDs::headphoneModel, 1),
         "Headphone Model",
-        0, 32, 1 // Default 1 (e.g. Sennheiser HD 600)
+        headphoneChoices,
+        0 // Default 0: Sennheiser HD 600
     ));
 
     // Headphone Calibration Toggle

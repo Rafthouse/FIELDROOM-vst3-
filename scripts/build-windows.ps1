@@ -12,7 +12,7 @@ if (-not (Test-Path $BuildDir)) {
 }
 
 Write-Host "--> Configuring CMake project..." -ForegroundColor Yellow
-cmake -B $BuildDir -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release
+cmake -B $BuildDir -A x64 -DCMAKE_BUILD_TYPE=Release -DFIELDROOM_COPY_PLUGIN_AFTER_BUILD=OFF
 
 if ($LASTEXITCODE -ne 0) {
     Write-Error "CMake configuration failed."
@@ -33,4 +33,5 @@ ctest --test-dir $BuildDir -C Release --output-on-failure
 Write-Host "==========================================" -ForegroundColor Green
 Write-Host "BUILD SUCCESSFUL!" -ForegroundColor Green
 Write-Host "VST3 Output: $BuildDir/FIELDROOM_artefacts/Release/VST3/FIELDROOM.vst3" -ForegroundColor Green
+Write-Host "Run scripts\install-windows.bat as Administrator to install to C:\Program Files\Common Files\VST3" -ForegroundColor Green
 Write-Host "==========================================" -ForegroundColor Green

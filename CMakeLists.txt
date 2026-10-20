@@ -14,7 +14,7 @@ if(APPLE)
     set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS deployment target" FORCE)
 endif()
 
-# Fetch JUCE framework (v7.0.9 / v8 compatible)
+# Fetch JUCE framework (v7.0.9)
 include(FetchContent)
 FetchContent_Declare(
     JUCE
@@ -24,10 +24,10 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(JUCE)
 
-# Optional libmysofa for AES69 / SOFA HRTF loading
-option(FIELDROOM_ENABLE_SOFA "Enable libmysofa for SOFA HRTF file support" ON)
+# Optional post-build system folder copy (disabled by default on CI to avoid permission errors)
+option(FIELDROOM_COPY_PLUGIN_AFTER_BUILD "Copy plugin to system folders after build" OFF)
 
-# Configure VST3 Plugin Target
+# Configure VST3 & AU Plugin Target
 juce_add_plugin(FIELDROOM
     COMPANY_NAME "AcousticLab"
     IS_SYNTH FALSE
@@ -35,7 +35,7 @@ juce_add_plugin(FIELDROOM
     NEEDS_MIDI_OUTPUT FALSE
     IS_MIDI_EFFECT FALSE
     EDITOR_WANTS_KEYBOARD_FOCUS TRUE
-    COPY_PLUGIN_AFTER_BUILD TRUE
+    COPY_PLUGIN_AFTER_BUILD ${FIELDROOM_COPY_PLUGIN_AFTER_BUILD}
     PLUGIN_MANUFACTURER_CODE AcLb
     PLUGIN_CODE FldR
     FORMATS VST3 AU
@@ -43,35 +43,24 @@ juce_add_plugin(FIELDROOM
     BUNDLE_ID "com.acousticlab.fieldroom"
 )
 
-# JUCE plugin-client configuration
-# VST2 SDK is not bundled and is not required; disable the VST2 replacement path
-# that otherwise pulls in pluginterfaces/vst2.x/vstfxstore.h
-target_compile_definitions(FIELDROOM PRIVATE
-    JUCE_VST3_CAN_REPLACE_VST2=0
-    JUCE_USE_CURL=0
-    JUCE_WEB_BROWSER=0
-)
-
 # Compiler warnings and optimization flags
 if(MSVC)
     target_compile_options(FIELDROOM PRIVATE
-        /W4 /WX- /permissive- /fp:fast
+        /W4 /WX- /permissive- /fp:fast /utf-8
         $<$<CONFIG:Release>:/O2 /Ob2 /Oi /Ot /GL>
+    )
+    target_compile_definitions(FIELDROOM PRIVATE
+        _CRT_SECURE_NO_WARNINGS
     )
     target_link_options(FIELDROOM PRIVATE
         $<$<CONFIG:Release>:/LTCG>
     )
 else()
     target_compile_options(FIELDROOM PRIVATE
-        -Wall -Wextra -Wpedantic -Wno-unused-parameter
+        -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-variable
         -ffast-math
-        $<$<CONFIG:Release>:-O3 -flto>
+        $<$<CONFIG:Release>:-O3>
     )
-    if(APPLE)
-        target_link_options(FIELDROOM PRIVATE
-            $<$<CONFIG:Release>:-flto>
-        )
-    endif()
 endif()
 
 # Plugin Source Files
@@ -126,6 +115,12 @@ target_include_directories(FIELDROOM PRIVATE
     src/Profiles
 )
 
+target_compile_definitions(FIELDROOM PUBLIC
+    JUCE_WEB_BROWSER=0
+    JUCE_USE_CURL=0
+    JUCE_VST3_CAN_REPLACE_VST2=0
+)
+
 # Link JUCE Modules
 target_link_libraries(FIELDROOM PRIVATE
     juce::juce_audio_utils
@@ -157,6 +152,11 @@ add_executable(fieldroom_dsp_tests
     src/DSP/HeadphoneCalibration.cpp
     src/DSP/MonitoringUtilities.cpp
 )
+
+if(MSVC)
+    target_compile_options(fieldroom_dsp_tests PRIVATE /utf-8)
+    target_compile_definitions(fieldroom_dsp_tests PRIVATE _CRT_SECURE_NO_WARNINGS)
+endif()
 
 target_include_directories(fieldroom_dsp_tests PRIVATE
     src
