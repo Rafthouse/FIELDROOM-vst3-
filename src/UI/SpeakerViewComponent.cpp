@@ -386,7 +386,7 @@ void SpeakerViewComponent::mouseDown(const juce::MouseEvent& e) {
         setMouseCursor(juce::MouseCursor::LeftRightResizeCursor);
     } else if (pos.getDistanceFrom(head) < 26.0f) {
         activeDragTarget = DragTarget::ListenerHead;
-        setMouseCursor(juce::MouseCursor::RotatedCursor);
+        setMouseCursor(juce::MouseCursor::DraggingHandCursor);
     } else {
         activeDragTarget = DragTarget::None;
     }
