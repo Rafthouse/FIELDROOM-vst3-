@@ -103,7 +103,7 @@ jobs:
         shell: pwsh
         run: |
           $is = Join-Path $env:TEMP 'innosetup.exe'
-          Invoke-WebRequest -Uri 'https://files.jrsoftware.org/is/6/innosetup-6.4.2.exe' -OutFile $is
+          Invoke-WebRequest -Uri 'https://files.jrsoftware.org/is/6/innosetup-6.7.3.exe' -OutFile $is
           Start-Process -FilePath $is -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-' -Wait
           $iscc = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
           if (-not (Test-Path $iscc)) { throw "ISCC.exe not found after install" }
