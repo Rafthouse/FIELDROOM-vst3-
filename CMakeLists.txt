@@ -43,6 +43,15 @@ juce_add_plugin(FIELDROOM
     BUNDLE_ID "com.acousticlab.fieldroom"
 )
 
+# JUCE plugin-client configuration
+# VST2 SDK is not bundled and is not required; disable the VST2 replacement path
+# that otherwise pulls in pluginterfaces/vst2.x/vstfxstore.h
+target_compile_definitions(FIELDROOM PRIVATE
+    JUCE_VST3_CAN_REPLACE_VST2=0
+    JUCE_USE_CURL=0
+    JUCE_WEB_BROWSER=0
+)
+
 # Compiler warnings and optimization flags
 if(MSVC)
     target_compile_options(FIELDROOM PRIVATE
