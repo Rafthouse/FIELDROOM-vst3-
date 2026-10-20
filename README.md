@@ -1,98 +1,103 @@
 # FIELDROOM
-### Professional Headphone Monitoring VST3 / AU Audio Plugin
-**Cross-Platform Binaural Virtual Loudspeaker & Acoustic Control Room Monitoring System**
 
-[![Build Native VST3 & AU](https://github.com/USER/REPO/actions/workflows/build.yml/badge.svg)](https://github.com/USER/REPO/actions/workflows/build.yml)
-[![JUCE](https://img.shields.io/badge/JUCE-7.0.9-orange.svg)](https://juce.com/)
-[![C++](https://img.shields.io/badge/C++-20-blue.svg)](https://en.cppreference.com/w/cpp/20)
-[![Formats](https://img.shields.io/badge/Formats-VST3%20%7C%20AU-green.svg)](https://www.steinberg.net/vst3/)
-[![Platforms](https://img.shields.io/badge/Platforms-macOS%20(Universal%202)%20%7C%20Windows%20(x64)-lightgrey.svg)]()
+**Professional headphone monitoring VST3 / AU audio plugin** — binaural virtual loudspeaker and acoustic control-room monitoring for studio headphones.
 
-FIELDROOM is an offline, real-time safe audio effect plugin engineered for music producers, mixing/mastering engineers, and sound designers. It accurately reproduces listening to high-end calibrated studio monitors in acoustically treated environments through standard studio reference headphones.
+[![Build](https://github.com/Rafthouse/FIELDROOM-vst3-/actions/workflows/build.yml/badge.svg)](https://github.com/Rafthouse/FIELDROOM-vst3-/actions/workflows/build.yml)
 
 ---
 
-## ⚡ Як отримати готові збірки (Windows / macOS) через GitHub Actions
+## English
 
-Вам **не потрібно встановлювати компілятори** або збирати проєкт вручну. Завдяки налаштованому файлу `.github/workflows/build.yml` хмарні сервери GitHub роблять це автоматично:
+### What it does
+FIELDROOM reproduces the experience of listening to calibrated studio monitors in a treated room, through ordinary studio headphones. It is an offline, real-time-safe audio effect: no telemetry, no network access, no background services.
 
-1. **Створіть репозиторій на GitHub**:
-   - Перейдіть на [github.com/new](https://github.com/new) та створіть новий репозиторій (наприклад `fieldroom-plugin`).
-2. **Завантажте проєкт у репозиторій**:
-   ```bash
-   git remote add origin https://github.com/<ваш-юзернейм>/fieldroom-plugin.git
-   git branch -M main
-   git push -u origin main
-   ```
-3. **Завантажте готові VST3 / AU файли**:
-   - Відкрийте вкладку **Actions** у вашому репозиторії на GitHub.
-   - Натисніть на перший робочий процес **Build Native VST3 & AU Plugins**.
-   - У розділі **Artifacts** знизу сторінки завантажте готові архіви:
-     - 🍏 **`FIELDROOM-macOS-Universal2.zip`** (містить `FIELDROOM.vst3` та `FIELDROOM.component` для Apple Silicon M1/M2/M3/M4 та Intel).
-     - 🪟 **`FIELDROOM-Windows-x64.zip`** (містить `FIELDROOM.vst3` для 64-бітних систем Windows 10/11).
-4. **Створення офіційного релізу**:
-   - Якщо створити Git-тег версії (наприклад `git tag v1.0.0 && git push origin v1.0.0`), GitHub Actions автоматично створить офіційний **GitHub Release** із прикріпленими файлами інсталяції.
+### Requirements
+- Windows 10/11 (x64) or macOS 11+ (Universal 2: Apple Silicon + Intel)
+- A VST3 or AU host (Ableton Live, Reaper, Cubase, Logic Pro, Studio One, ...)
 
----
+### Installation — Windows
+1. Download `FIELDROOM-Windows-x64.zip` from [Releases](../../releases).
+2. Unzip it.
+3. Copy the `FIELDROOM.vst3` folder to:
+   `C:\Program Files\Common Files\VST3\`
+4. Restart your DAW and rescan plugins.
+5. Insert **FIELDROOM** (vendor: AcousticLab) on a track or the master bus.
 
-## 🎧 Ключові можливості (Features)
+> If the plugin does not appear, install the Microsoft Visual C++ Redistributable (x64) and rescan again.
 
-1. **Тривимірна віртуальна сцена (Acoustic Stage)**:
-   - **Nearfield (1.1 m / 60°)**: Фокусований прямий звук, мінімальний вплив кімнати, точний контроль транзієнтів та низьких частот.
-   - **Midfield (2.2 m / 60°)**: Еталонний студійний трикутник, збалансована стереопанорама та ревербераційний баланс.
-   - **Farfield (4.2 m / 60°)**: Масштаб головних контрольних моніторів (Main Monitors), перевірка клубного саунду та кінематографічної глибини.
-   - **Регулювання кута розкриття моніторів (30° – 110°)**: Інтерактивне симетричне позиціонування віртуальних колонок.
-   - **Обертання голови (±90°)**: Інспекція балансу та фантомного центру за моделлю Woodworth-Schlosser.
+### Installation — macOS
+1. Download `FIELDROOM-macOS-Universal2.zip` (or the `.pkg` installer) from [Releases](../../releases).
+2. Unzip and copy `FIELDROOM.vst3` to `/Library/Audio/Plug-Ins/VST3/`, and `FIELDROOM.component` to `/Library/Audio/Plug-Ins/Components/`.
+   With the `.pkg` installer, just run it and follow the prompts.
+3. Unsigned build: on first launch use **right-click → Open**, or allow it in
+   *System Settings → Privacy & Security*.
+4. Restart your host and rescan plugins.
 
-2. **Акустичні контрольні простори**:
-   - **Neutral Reference**: Акустично заглушений контрольний простір (RT60: 0.15s).
-   - **Small Studio**: Бюджетна проджект-студія з природним відгуком (RT60: 0.28s).
-   - **Professional Control Room**: Студія звукозапису з дифузією та бас-пастками (RT60: 0.38s).
-   - **Large Control Room**: Простора майстеринг-апаратна комерційного комплексу (RT60: 0.58s).
-   - **Domestic Living Room**: Побутова кімната для фінальної перевірки трансляції міксу (RT60: 0.75s).
+### Usage
+1. Insert FIELDROOM on the master bus (or a monitor bus).
+2. Select your headphone model in the calibration panel.
+3. Choose a room preset and speaker layout, or set distances and angles manually.
+4. Adjust room damping and output trim to taste.
+5. A/B the processed and bypassed signal with the host's bypass to hear the difference.
 
-3. **Калібрування навушників (10-Band Biquad PEQ)**:
-   - Заводські коригувальні профілі з бази **AutoEq / Oratory1990**:
-     - **V-MODA M-200** (компенсація резонансу 540 Гц та відновлення вокальної ями 3.5 кГц / 8 кГц)
-     - **Sennheiser HD 600 / HD 650**
-     - **Beyerdynamic DT 770 Pro (80Ω) / DT 990 Pro (250Ω)**
-     - **Audio-Technica ATH-M50x**
-     - **Sony MDR-7506**
-     - **AKG K371**
-     - **Audeze LCD-X**
-     - **Focal Clear MG Pro**
-     - **Neumann NDH 30**
-   - Автоматичний розрахунок цифрового запасу (Digital Headroom Auto-Preamp) для усунення спотворень.
-
-4. **Апаратна консоль моніторингу**:
-   - Маршрутизація: **STEREO**, **MONO** (-3 dB pan-law), **SIDE** ((L-R)/2), **L Solo**, **R Solo**, **L/R SWAP**.
-   - Атенюатор **DIM -18 dB**.
-   - Режим **EQ ONLY** (чиста корекція навушників без моделювання кімнати).
-   - Функція **LOUDNESS MATCH** (вирівнювання гучності між Near, Mid та Far).
-   - Фазовий корелометр (-1 ... +1) та пікметри з детектором кліпування.
+### Notes
+- The plugin processes audio only; it does not phone home.
+- Presets are stored with the project, user profiles are stored locally.
+- Builds are produced automatically by GitHub Actions on every push to `main`.
 
 ---
 
-## 🛠 Ручна компіляція (Local Build)
+## Українською
 
-### macOS (Universal 2: Apple Silicon + Intel)
+### Що це
+FIELDROOM відтворює звучання відкаліброваних студійних моніторів в обробленій кімнаті — через звичайні студійні навушники. Це офлайн аудіоефект, безпечний для реального часу: без телеметрії, без мережі, без фонових сервісів.
+
+### Вимоги
+- Windows 10/11 (x64) або macOS 11+ (Universal 2: Apple Silicon + Intel)
+- VST3- або AU-хост (Ableton Live, Reaper, Cubase, Logic Pro, Studio One, ...)
+
+### Встановлення — Windows
+1. Завантаж `FIELDROOM-Windows-x64.zip` з розділу [Releases](../../releases).
+2. Розпакуй архів.
+3. Скопіюй папку `FIELDROOM.vst3` у:
+   `C:\Program Files\Common Files\VST3\`
+4. Перезапусти DAW і зроби rescan плагінів.
+5. Додай **FIELDROOM** (вендор: AcousticLab) на доріжку або мастер-шину.
+
+> Якщо плагін не зʼявився — встанови Microsoft Visual C++ Redistributable (x64) і повтори сканування.
+
+### Встановлення — macOS
+1. Завантаж `FIELDROOM-macOS-Universal2.zip` (або `.pkg`-інсталятор) з [Releases](../../releases).
+2. Розпакуй і скопіюй `FIELDROOM.vst3` у `/Library/Audio/Plug-Ins/VST3/`, а `FIELDROOM.component` — у `/Library/Audio/Plug-Ins/Components/`.
+   З `.pkg`-інсталятором просто запусти його і дотримуйся підказок.
+3. Збірка без підпису: при першому запуску — **правий клік → Open**, або дозволь у
+   *System Settings → Privacy & Security*.
+4. Перезапусти хост і зроби rescan плагінів.
+
+### Як користуватися
+1. Додай FIELDROOM на мастер-шину (або монітор-шину).
+2. Обери модель навушників у панелі калібрації.
+3. Обери пресет кімнати й розстановку моніторів, або задай відстані та кути вручну.
+4. Налаштуй демпфування кімнати та вихідний рівень.
+5. Порівняй оброблений і байпасний сигнал штатним bypass хоста.
+
+### Примітки
+- Плагін лише обробляє аудіо; жодних звернень до мережі.
+- Пресети зберігаються з проєктом, користувацькі профілі — локально.
+- Збірки створюються автоматично через GitHub Actions на кожен пуш у `main`.
+
+---
+
+## Build from source
+
 ```bash
-brew install cmake ninja
-chmod +x scripts/build-macos.sh
-./scripts/build-macos.sh
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release --parallel
+ctest --test-dir build -C Release --output-on-failure
 ```
-Шляхи встановлення:
-- VST3: `/Library/Audio/Plug-Ins/VST3/FIELDROOM.vst3`
-- AU: `/Library/Audio/Plug-Ins/Components/FIELDROOM.component`
 
-### Windows 10 / 11 (Visual Studio 2022 x64)
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\build-windows.ps1
-```
-Шлях встановлення:
-- VST3: `C:\Program Files\Common Files\VST3\FIELDROOM.vst3`
+Requirements: CMake 3.22+, C++20 compiler, JUCE 7.0.9 (fetched automatically).
 
----
+## License
 
-## 📜 Ліцензія
-MIT License. Всі алгоритми виконані відповідно до стандарту реального часу (Zero-Allocation Audio Thread, Real-Time Safe).
+See [LICENSES/LICENSE](LICENSES/LICENSE).

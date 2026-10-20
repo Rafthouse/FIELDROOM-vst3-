@@ -41,11 +41,23 @@ jobs:
           zip -r ../../../dist-macos/FIELDROOM-macOS-Universal2.zip VST3/FIELDROOM.vst3 AU/FIELDROOM.component
           cd ../../..
 
+      - name: Build macOS installer (.pkg)
+        run: |
+          mkdir -p pkgroot/Library/Audio/Plug-Ins/VST3
+          mkdir -p pkgroot/Library/Audio/Plug-Ins/Components
+          cp -R build/FIELDROOM_artefacts/Release/VST3/FIELDROOM.vst3 pkgroot/Library/Audio/Plug-Ins/VST3/
+          cp -R build/FIELDROOM_artefacts/Release/AU/FIELDROOM.component pkgroot/Library/Audio/Plug-Ins/Components/
+          pkgbuild --root pkgroot \
+            --identifier com.acousticlab.fieldroom \
+            --version 1.0.0 \
+            --install-location / \
+            dist-macos/FIELDROOM-macOS-Universal2.pkg
+
       - name: Upload macOS Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: FIELDROOM-macOS-Universal2
-          path: dist-macos/FIELDROOM-macOS-Universal2.zip
+          path: dist-macos/*
           if-no-files-found: error
 
   build-windows:
