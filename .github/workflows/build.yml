@@ -53,6 +53,21 @@ jobs:
             --install-location / \
             dist-macos/FIELDROOM-macOS-Universal2.pkg
 
+      - name: Build macOS disk image (.dmg)
+        run: |
+          brew install create-dmg
+          mkdir -p dmg-staging
+          cp -R build/FIELDROOM_artefacts/Release/VST3/FIELDROOM.vst3 dmg-staging/
+          cp -R build/FIELDROOM_artefacts/Release/AU/FIELDROOM.component dmg-staging/
+          create-dmg \
+            --volname "FIELDROOM" \
+            --window-size 520 340 \
+            --icon-size 110 \
+            --app-drop-link 400 120 \
+            dist-macos/FIELDROOM-macOS-Universal2.dmg \
+            dmg-staging || true
+          ls -la dist-macos
+
       - name: Upload macOS Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -84,11 +99,18 @@ jobs:
           New-Item -ItemType Directory -Force -Path dist-windows
           Compress-Archive -Path build/FIELDROOM_artefacts/Release/VST3/FIELDROOM.vst3 -DestinationPath dist-windows/FIELDROOM-Windows-x64.zip
 
+      - name: Build Windows installer (Inno Setup)
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer/fieldroom.iss
+          Get-ChildItem dist-windows
+
       - name: Upload Windows Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: FIELDROOM-Windows-x64
-          path: dist-windows/FIELDROOM-Windows-x64.zip
+          path: dist-windows/*
           if-no-files-found: error
 
   release:
