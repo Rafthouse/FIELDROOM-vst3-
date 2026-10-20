@@ -11,7 +11,7 @@ AppPublisher={#MyAppPublisher}
 DefaultDirName={commoncf}\VST3
 DisableDirPage=yes
 DisableProgramGroupPage=yes
-OutputDir=dist-windows
+OutputDir=..\dist-windows
 OutputBaseFilename=FIELDROOM-Windows-Setup-x64
 Compression=lzma2
 SolidCompression=yes
@@ -20,7 +20,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 WizardStyle=modern
 
 [Files]
-Source: "build\FIELDROOM_artefacts\Release\VST3\FIELDROOM.vst3\*"; DestDir: "{commoncf}\VST3\FIELDROOM.vst3"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\build\FIELDROOM_artefacts\Release\VST3\FIELDROOM.vst3\*"; DestDir: "{commoncf}\VST3\FIELDROOM.vst3"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Run]
 Filename: "https://github.com/Rafthouse/FIELDROOM-vst3-"; Flags: shellexec postinstall skipifsilent unchecked; Description: "Open project page"
