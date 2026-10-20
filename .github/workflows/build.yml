@@ -102,7 +102,9 @@ jobs:
       - name: Build Windows installer (Inno Setup)
         shell: pwsh
         run: |
-          winget install --id JRSoftware.InnoSetup -e --silent --accept-package-agreements --accept-source-agreements
+          $is = Join-Path $env:TEMP 'innosetup.exe'
+          Invoke-WebRequest -Uri 'https://files.jrsoftware.org/is/6/innosetup-6.4.2.exe' -OutFile $is
+          Start-Process -FilePath $is -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-' -Wait
           $iscc = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
           if (-not (Test-Path $iscc)) { throw "ISCC.exe not found after install" }
           & $iscc installer/fieldroom.iss
