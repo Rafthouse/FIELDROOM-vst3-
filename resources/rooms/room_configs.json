@@ -1,0 +1,65 @@
+{
+  "version": "1.0.0",
+  "rooms": [
+    {
+      "id": "neutral_ref",
+      "name": "Neutral Reference",
+      "description": "Minimal coloration, highly absorbent control room for critical transient and surgical EQ decisions.",
+      "rt60_s": 0.15,
+      "early_refl_db": -18.0,
+      "damping_hz": 9000,
+      "dimensions_m": {"width": 4.5, "length": 5.5, "height": 2.8},
+      "drr_near_db": 16.0,
+      "drr_mid_db": 11.0,
+      "drr_far_db": 6.5
+    },
+    {
+      "id": "small_studio",
+      "name": "Small Studio",
+      "description": "Compact project studio with acoustic treatment, typical of modern bedroom and vocal booth setups.",
+      "rt60_s": 0.28,
+      "early_refl_db": -12.0,
+      "damping_hz": 6500,
+      "dimensions_m": {"width": 4.2, "length": 5.0, "height": 2.6},
+      "drr_near_db": 13.5,
+      "drr_mid_db": 8.0,
+      "drr_far_db": 4.0
+    },
+    {
+      "id": "pro_control_room",
+      "name": "Professional Control Room",
+      "description": "Balanced, symmetrical mixing control room with deep bass trapping and diffused rear reflection zone.",
+      "rt60_s": 0.38,
+      "early_refl_db": -9.0,
+      "damping_hz": 5200,
+      "dimensions_m": {"width": 6.2, "length": 7.8, "height": 3.2},
+      "drr_near_db": 14.0,
+      "drr_mid_db": 7.0,
+      "drr_far_db": 1.5
+    },
+    {
+      "id": "large_control_room",
+      "name": "Large Control Room",
+      "description": "Spacious commercial studio control room engineered for main midfield and soffit-mounted farfield monitoring.",
+      "rt60_s": 0.58,
+      "early_refl_db": -6.5,
+      "damping_hz": 4400,
+      "dimensions_m": {"width": 8.5, "length": 11.0, "height": 4.0},
+      "drr_near_db": 12.0,
+      "drr_mid_db": 5.5,
+      "drr_far_db": 0.5
+    },
+    {
+      "id": "domestic_room",
+      "name": "Domestic Listening Room",
+      "description": "Real-world untreated living room with carpet, couch, and wall reflections for real-world mix translation checks.",
+      "rt60_s": 0.48,
+      "early_refl_db": -8.0,
+      "damping_hz": 3800,
+      "dimensions_m": {"width": 4.8, "length": 6.2, "height": 2.5},
+      "drr_near_db": 11.0,
+      "drr_mid_db": 4.5,
+      "drr_far_db": -1.0
+    }
+  ]
+}

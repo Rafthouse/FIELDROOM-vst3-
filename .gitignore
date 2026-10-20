@@ -1,0 +1,18 @@
+# Build output directories
+build/
+bin/
+out/
+cmake-build-*/
+.cache/
+
+# IDE files
+.vscode/
+.idea/
+*.user
+*.suo
+*.VC.db
+*.sln.docstates
+
+# OS files
+.DS_Store
+Thumbs.db

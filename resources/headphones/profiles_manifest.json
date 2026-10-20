@@ -1,0 +1,134 @@
+{
+  "version": "1.0.0",
+  "license": "MIT / AutoEq (Jaakko Pasanen)",
+  "reference_target": "Diffuse-Field & Harman 2018 AE/OE",
+  "models": [
+    {
+      "id": "sennheiser_hd600",
+      "manufacturer": "Sennheiser",
+      "model": "HD 600",
+      "type": "Open Dynamic 300 Ohm",
+      "rig": "GRAS 43AG",
+      "source": "Oratory1990",
+      "preamp_db": -5.0,
+      "bands": [
+        {"type": "LowShelf", "freq": 105, "gain": 4.5, "q": 0.71},
+        {"type": "Peaking", "freq": 160, "gain": -1.8, "q": 1.4},
+        {"type": "Peaking", "freq": 1300, "gain": -1.5, "q": 2.0},
+        {"type": "Peaking", "freq": 3500, "gain": -2.5, "q": 3.2},
+        {"type": "Peaking", "freq": 5600, "gain": 2.2, "q": 2.8},
+        {"type": "Peaking", "freq": 8200, "gain": -1.8, "q": 4.0},
+        {"type": "HighShelf", "freq": 10000, "gain": -0.8, "q": 0.71}
+      ]
+    },
+    {
+      "id": "sennheiser_hd650",
+      "manufacturer": "Sennheiser",
+      "model": "HD 650",
+      "type": "Open Dynamic 300 Ohm",
+      "rig": "GRAS 43AG",
+      "source": "Oratory1990",
+      "preamp_db": -5.5,
+      "bands": [
+        {"type": "LowShelf", "freq": 105, "gain": 5.0, "q": 0.71},
+        {"type": "Peaking", "freq": 220, "gain": -2.0, "q": 1.2},
+        {"type": "Peaking", "freq": 3400, "gain": -2.0, "q": 2.5},
+        {"type": "Peaking", "freq": 5800, "gain": 2.5, "q": 2.2},
+        {"type": "HighShelf", "freq": 10000, "gain": -1.2, "q": 0.71}
+      ]
+    },
+    {
+      "id": "beyer_dt770_80",
+      "manufacturer": "Beyerdynamic",
+      "model": "DT 770 Pro (80 Ohm)",
+      "type": "Closed Dynamic 80 Ohm",
+      "rig": "GRAS 43AG",
+      "source": "Oratory1990",
+      "preamp_db": -3.5,
+      "bands": [
+        {"type": "LowShelf", "freq": 80, "gain": -2.5, "q": 0.71},
+        {"type": "Peaking", "freq": 240, "gain": -3.2, "q": 1.8},
+        {"type": "Peaking", "freq": 3800, "gain": 3.5, "q": 2.0},
+        {"type": "Peaking", "freq": 5900, "gain": -5.8, "q": 4.5},
+        {"type": "Peaking", "freq": 8600, "gain": -4.5, "q": 3.8},
+        {"type": "HighShelf", "freq": 10000, "gain": -2.0, "q": 0.71}
+      ]
+    },
+    {
+      "id": "beyer_dt990_250",
+      "manufacturer": "Beyerdynamic",
+      "model": "DT 990 Pro (250 Ohm)",
+      "type": "Open Dynamic 250 Ohm",
+      "rig": "GRAS 43AG",
+      "source": "Oratory1990",
+      "preamp_db": -4.0,
+      "bands": [
+        {"type": "LowShelf", "freq": 90, "gain": 3.8, "q": 0.71},
+        {"type": "Peaking", "freq": 210, "gain": -2.5, "q": 1.5},
+        {"type": "Peaking", "freq": 4300, "gain": 2.0, "q": 2.2},
+        {"type": "Peaking", "freq": 5800, "gain": -7.2, "q": 4.0},
+        {"type": "Peaking", "freq": 8400, "gain": -5.5, "q": 3.5},
+        {"type": "HighShelf", "freq": 10000, "gain": -3.0, "q": 0.71}
+      ]
+    },
+    {
+      "id": "ath_m50x",
+      "manufacturer": "Audio-Technica",
+      "model": "ATH-M50x",
+      "type": "Closed Dynamic 38 Ohm",
+      "rig": "GRAS 43AG",
+      "source": "Oratory1990",
+      "preamp_db": -2.8,
+      "bands": [
+        {"type": "LowShelf", "freq": 110, "gain": -3.8, "q": 0.71},
+        {"type": "Peaking", "freq": 300, "gain": -2.2, "q": 1.6},
+        {"type": "Peaking", "freq": 3200, "gain": 2.4, "q": 2.5},
+        {"type": "Peaking", "freq": 9200, "gain": -4.8, "q": 3.2},
+        {"type": "HighShelf", "freq": 10000, "gain": -1.5, "q": 0.71}
+      ]
+    },
+    {
+      "id": "sony_mdr7506",
+      "manufacturer": "Sony",
+      "model": "MDR-7506",
+      "type": "Closed Dynamic 63 Ohm",
+      "rig": "Type 4153",
+      "source": "Rtings",
+      "preamp_db": -2.5,
+      "bands": [
+        {"type": "LowShelf", "freq": 95, "gain": 2.5, "q": 0.71},
+        {"type": "Peaking", "freq": 250, "gain": -2.0, "q": 1.5},
+        {"type": "Peaking", "freq": 2800, "gain": 1.8, "q": 2.2},
+        {"type": "Peaking", "freq": 4500, "gain": -3.5, "q": 3.0},
+        {"type": "Peaking", "freq": 8000, "gain": -4.2, "q": 4.0}
+      ]
+    },
+    {
+      "id": "audeze_lcd_x_2021",
+      "manufacturer": "Audeze",
+      "model": "LCD-X (2021 Revision)",
+      "type": "Planar Magnetic 20 Ohm",
+      "rig": "GRAS 43AG",
+      "source": "Oratory1990",
+      "preamp_db": -3.8,
+      "bands": [
+        {"type": "LowShelf", "freq": 80, "gain": 2.2, "q": 0.71},
+        {"type": "Peaking", "freq": 1000, "gain": -1.2, "q": 1.8},
+        {"type": "Peaking", "freq": 3500, "gain": 3.5, "q": 2.2},
+        {"type": "Peaking", "freq": 6000, "gain": -2.0, "q": 3.0}
+      ]
+    },
+    {
+      "id": "vmoda_m200_wired",
+      "manufacturer": "V-MODA",
+      "model": "M-200 (wired/passive)",
+      "type": "Wired Passive Studio Closed Dynamic",
+      "rig": "Pending standardized fixture (GRAS 43AG / IEC 60318-4)",
+      "source": "AutoEq / Sonarworks review provenance note",
+      "status": "CALIBRATION_PENDING",
+      "preamp_db": 0.0,
+      "bands": [],
+      "notes": "Original wired passive studio reference version (50mm CCAW neodymium drivers). Calibration status is CALIBRATION_PENDING. Strict safety policy prevents loading unverified EQ coefficients; operates in linear transparent pass-through mode until laboratory measurements are verified."
+    }
+  ]
+}
