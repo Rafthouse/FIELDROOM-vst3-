@@ -46,7 +46,7 @@ juce_add_plugin(FIELDROOM
 # Compiler warnings and optimization flags
 if(MSVC)
     target_compile_options(FIELDROOM PRIVATE
-        /W4 /WX- /permissive- /fp:fast /utf-8
+        /W4 /WX- /permissive- /utf-8
         $<$<CONFIG:Release>:/O2 /Ob2 /Oi /Ot /GL>
     )
     target_compile_definitions(FIELDROOM PRIVATE
@@ -58,7 +58,6 @@ if(MSVC)
 else()
     target_compile_options(FIELDROOM PRIVATE
         -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-variable
-        -ffast-math
         $<$<CONFIG:Release>:-O3>
     )
 endif()
@@ -79,11 +78,7 @@ target_sources(FIELDROOM PRIVATE
     src/DSP/BinauralRenderer.h
     src/DSP/BinauralRenderer.cpp
     src/DSP/HRTFManager.h
-    src/DSP/HRTFManager.cpp
-    src/DSP/ConvolutionEngine.h
-    src/DSP/ConvolutionEngine.cpp
     src/DSP/SpeakerGeometry.h
-    src/DSP/SpeakerGeometry.cpp
     src/DSP/RoomEngine.h
     src/DSP/RoomEngine.cpp
     src/DSP/HeadphoneCalibration.h
@@ -98,11 +93,8 @@ target_sources(FIELDROOM PRIVATE
     src/UI/SpeakerViewComponent.h
     src/UI/SpeakerViewComponent.cpp
 
-    # Presets & Profiles
+    # Presets
     src/Presets/PresetManager.h
-    src/Presets/PresetManager.cpp
-    src/Profiles/UserProfileManager.h
-    src/Profiles/UserProfileManager.cpp
 )
 
 # Target include directories
@@ -112,13 +104,14 @@ target_include_directories(FIELDROOM PRIVATE
     src/Parameters
     src/UI
     src/Presets
-    src/Profiles
 )
 
 target_compile_definitions(FIELDROOM PUBLIC
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
     JUCE_VST3_CAN_REPLACE_VST2=0
+    # GPLv3 project: JUCE 7 EULA allows removing the "Made with JUCE" splash
+    JUCE_DISPLAY_SPLASH_SCREEN=0
 )
 
 # Link JUCE Modules
@@ -145,9 +138,6 @@ enable_testing()
 add_executable(fieldroom_dsp_tests
     tests/dsp/test_dsp_core.cpp
     src/DSP/BinauralRenderer.cpp
-    src/DSP/HRTFManager.cpp
-    src/DSP/ConvolutionEngine.cpp
-    src/DSP/SpeakerGeometry.cpp
     src/DSP/RoomEngine.cpp
     src/DSP/HeadphoneCalibration.cpp
     src/DSP/MonitoringUtilities.cpp

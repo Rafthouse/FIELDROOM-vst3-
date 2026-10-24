@@ -1,6 +1,6 @@
 #pragma once
 
-#include <vector>
+#include <array>
 #include <cmath>
 #include <juce_dsp/juce_dsp.h>
 #include "SpeakerGeometry.h"
@@ -8,6 +8,12 @@
 
 namespace fieldroom {
 
+/**
+ * Virtual loudspeaker to binaural renderer (2x2 speaker-to-ear matrix).
+ *
+ * All delay lines are fixed-size, power-of-two ring buffers allocated as members, so prepare() and
+ * process() never allocate and wrap-around is a bit mask instead of a modulo.
+ */
 class BinauralRenderer {
 public:
     BinauralRenderer();
@@ -28,25 +34,26 @@ public:
     float getHeadRotation() const noexcept { return currentRotationDeg; }
 
 private:
+    static constexpr int MaxDelaySamples = 4096;               // ~85 ms at 48 kHz, far beyond any field
+    static constexpr int DelayBufferSize = 8192;                // power of two >= MaxDelaySamples + 1
+    static constexpr int DelayMask = DelayBufferSize - 1;
+
     double currentSampleRate{48000.0};
     int currentField{1}; // 0 = Near, 1 = Mid, 2 = Far
     float currentSpreadDeg{60.0f}; // Included angle (30° - 110°)
     float currentRotationDeg{0.0f};
     bool loudnessMatchEnabled{true};
 
-    // Fractional delay lines for ipsilateral & contralateral loudspeaker propagation
-    static constexpr int MaxDelaySamples = 4096;
-    std::vector<float> delayBufferL;
-    std::vector<float> delayBufferR;
+    // Ring buffers for ipsilateral & contralateral loudspeaker propagation
+    std::array<float, DelayBufferSize> delayBufferL{};
+    std::array<float, DelayBufferSize> delayBufferR{};
     int writeIndex{0};
 
-    // Lowpass head-shadow biquad filters for contralateral diffraction
-    juce::dsp::IIR::Filter<float> shadowFilterLL; // Left speaker -> Left ear
+    // Lowpass head-shadow filters for the contralateral paths
     juce::dsp::IIR::Filter<float> shadowFilterLR; // Left speaker -> Right ear (contralateral)
     juce::dsp::IIR::Filter<float> shadowFilterRL; // Right speaker -> Left ear (contralateral)
-    juce::dsp::IIR::Filter<float> shadowFilterRR; // Right speaker -> Right ear
 
-    // Air absorption high-shelf / lowpass for distance propagation
+    // Air absorption high-shelf for distance propagation
     juce::dsp::IIR::Filter<float> airAbsorptionL;
     juce::dsp::IIR::Filter<float> airAbsorptionR;
 
@@ -64,7 +71,7 @@ private:
     juce::SmoothedValue<float> loudnessGainSmoother;
 
     void updateGeometry();
-    float readInterpolatedDelay(const std::vector<float>& buf, float delayInSamples) const noexcept;
+    float readInterpolatedDelay(const std::array<float, DelayBufferSize>& buf, float delayInSamples) const noexcept;
 };
 
 } // namespace fieldroom

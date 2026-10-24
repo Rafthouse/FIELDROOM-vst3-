@@ -5,36 +5,67 @@
 namespace fieldroom {
 
 /**
- * @brief Ultra-premium LookAndFeel for FIELDROOM VST3/AU native GUI.
+ * Visual system for FIELDROOM: graphite chassis, champagne-gold accent, one type scale.
  *
- * Emulates high-end studio mastering hardware (milled obsidian aluminum,
- * precision knurled rotary knobs with glass reflections, tactical segmented buttons,
- * analog LED indicators, and champagne-gold / phosphor-teal lighting).
+ * Components are styled by role rather than by one-off drawing:
+ *  - segmented buttons: TextButton with the "segment" property (one group, shared container drawn by the editor)
+ *  - pills: ToggleButton, with an LED that lights when the state is on
+ *  - rotary knobs: arc track, gold value arc, and a readout that is painted by drawLabel()
  */
 class CustomLookAndFeel : public juce::LookAndFeel_V4 {
 public:
     CustomLookAndFeel();
     ~CustomLookAndFeel() override = default;
 
-    // Rotary Slider with precision milled knurling, glass glare, and glowing value track
+    // ---- Palette -------------------------------------------------------------------------
+    static const juce::Colour canvas;        // window background
+    static const juce::Colour surface;       // card background
+    static const juce::Colour surfaceRaised; // elevated element
+    static const juce::Colour inset;         // recessed well (combo boxes, meters, stage)
+    static const juce::Colour hairline;      // 1 px dividers and borders
+    static const juce::Colour hairlineSoft;  // subtle borders
+    static const juce::Colour gold;          // accent
+    static const juce::Colour goldBright;    // accent highlight
+    static const juce::Colour goldDeep;      // accent shadow
+    static const juce::Colour teal;          // informative accent (routing, listener)
+    static const juce::Colour textPrimary;
+    static const juce::Colour textSecondary;
+    static const juce::Colour textTertiary;  // labels; >= 4.5:1 on surface
+    static const juce::Colour ledOn;         // positive state
+    static const juce::Colour ledWarn;       // bypass, not verified
+    static const juce::Colour ledClip;       // clipping
+
+    // ---- Type scale ----------------------------------------------------------------------
+    static juce::Font titleFont(float size = 15.0f);
+    static juce::Font bodyFont(float size = 11.0f, bool bold = false);
+    static juce::Font labelFont(float size = 8.5f);   // uppercase, letter-spaced
+    static juce::String degreeSign();
+
+    // ---- LookAndFeel overrides -----------------------------------------------------------
     void drawRotarySlider(juce::Graphics& g, int x, int y, int width, int height,
                           float sliderPosProportional, float rotaryStartAngle,
                           float rotaryEndAngle, juce::Slider& slider) override;
 
-    // Tactical Push Buttons with LED status indicators, inset bevels, and tactile click states
     void drawButtonBackground(juce::Graphics& g, juce::Button& button,
-                             const juce::Colour& backgroundColour,
-                             bool shouldDrawButtonAsHighlighted,
-                             bool shouldDrawButtonAsDown) override;
+                              const juce::Colour& backgroundColour,
+                              bool shouldDrawButtonAsHighlighted,
+                              bool shouldDrawButtonAsDown) override;
 
     void drawButtonText(juce::Graphics& g, juce::TextButton& button,
                         bool shouldDrawButtonAsHighlighted,
                         bool shouldDrawButtonAsDown) override;
 
-    // Hardware Inset Dropdown ComboBoxes
+    void drawToggleButton(juce::Graphics& g, juce::ToggleButton& button,
+                          bool shouldDrawButtonAsHighlighted,
+                          bool shouldDrawButtonAsDown) override;
+
     void drawComboBox(juce::Graphics& g, int width, int height, bool isButtonDown,
                       int buttonX, int buttonY, int buttonW, int buttonH,
                       juce::ComboBox& box) override;
+
+    void positionComboBoxText(juce::ComboBox& box, juce::Label& label) override;
+
+    void drawLabel(juce::Graphics& g, juce::Label& label) override;
 
     void drawPopupMenuBackground(juce::Graphics& g, int width, int height) override;
 
@@ -44,23 +75,9 @@ public:
                            const juce::String& shortcutKeyText,
                            const juce::Drawable* icon, const juce::Colour* textColour) override;
 
-    // Studio Hardware Palette
-    static const juce::Colour bgObsidian;       // #121618 deep charcoal chassis
-    static const juce::Colour panelSurface;     // #161B1D satin panel
-    static const juce::Colour panelRaised;      // #202729 card container
-    static const juce::Colour panelMilled;      // #1A2123 recessed bezel
-    static const juce::Colour metalBorder;      // #2A3437 milled aluminum seam
-    static const juce::Colour metalBorderLight; // #3D4A4E highlight edge
-    static const juce::Colour accentGold;       // #C4A46E champagne studio gold
-    static const juce::Colour accentGoldBright; // #E5C992 gold highlight
-    static const juce::Colour accentGoldDark;   // #8A6E3D deep gold shadow
-    static const juce::Colour accentCyan;       // #83ADB4 phosphor teal
-    static const juce::Colour ledGreen;         // #22C55E active power / ok
-    static const juce::Colour ledAmber;         // #F59E0B warning / caution
-    static const juce::Colour ledRed;           // #EF4444 clip indicator
-    static const juce::Colour textBright;       // #E5E8E3 primary legibility
-    static const juce::Colour textMuted;        // #9CA9A7 secondary technical
-    static const juce::Colour textDim;          // #647371 etched labels
+private:
+    static void drawLed(juce::Graphics& g, juce::Point<float> centre, float diameter,
+                        juce::Colour colour, bool lit);
 };
 
 } // namespace fieldroom

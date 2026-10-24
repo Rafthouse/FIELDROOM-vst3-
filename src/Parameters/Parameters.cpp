@@ -96,7 +96,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout ParameterManager::createPara
     layout.add(std::make_unique<juce::AudioParameterChoice>(
         juce::ParameterID(ParameterIDs::monitoringMode, 1),
         "Monitoring Mode",
-        juce::StringArray{"Normal Stereo", "Mono (-3dB)", "Side (L-R)", "Left Solo", "Right Solo"},
+        juce::StringArray{"Normal Stereo", "Mono (L+R)/2", "Side (L-R)", "Left Solo", "Right Solo"},
         0
     ));
 

@@ -369,43 +369,163 @@ std::vector<HeadphoneProfile> HeadphoneCalibration::getBundledProfiles() {
     return list;
 }
 
-HeadphoneCalibration::HeadphoneCalibration() {
-    bundledProfiles = getBundledProfiles();
-    if (!bundledProfiles.empty()) {
-        currentProfile = bundledProfiles[0];
+HeadphoneCalibration::HeadphoneCalibration()
+    : bundledProfiles(getBundledProfiles()) {
+    requested.store(packRequest(Request{}), std::memory_order_relaxed);
+}
+
+uint64_t HeadphoneCalibration::packRequest(const Request& r) noexcept {
+    const int index = std::clamp(r.profileIndex, 0, 255);
+    const int gainCentiDb = static_cast<int>(std::lround(std::clamp(r.manualGainDb, -60.0f, 60.0f) * 100.0f));
+    uint64_t packed = static_cast<uint64_t>(index);
+    packed |= static_cast<uint64_t>(r.enabled ? 1 : 0) << 8;
+    packed |= static_cast<uint64_t>(r.autoPreamp ? 1 : 0) << 9;
+    packed |= static_cast<uint64_t>(static_cast<uint16_t>(static_cast<int16_t>(gainCentiDb))) << 16;
+    return packed;
+}
+
+HeadphoneCalibration::Request HeadphoneCalibration::unpackRequest(uint64_t packed) noexcept {
+    Request r;
+    r.profileIndex = static_cast<int>(packed & 0xFFu);
+    r.enabled = ((packed >> 8) & 1u) != 0;
+    r.autoPreamp = ((packed >> 9) & 1u) != 0;
+    const auto gainRaw = static_cast<int16_t>(static_cast<uint16_t>((packed >> 16) & 0xFFFFu));
+    r.manualGainDb = static_cast<float>(gainRaw) * 0.01f;
+    return r;
+}
+
+HeadphoneCalibration::PreparedCalibrationState HeadphoneCalibration::makeTableEntry(int profileIndex) const {
+    PreparedCalibrationState s;
+    const auto& profile = bundledProfiles[static_cast<size_t>(profileIndex)];
+    s.profileIndex = profileIndex;
+    s.status = profile.status;
+    s.hasIndependentLR = profile.hasIndependentLR;
+
+    if (profile.status != CalibrationStatus::VerifiedCalibrated) {
+        // Pending or unverified models never attenuate or boost and are never filtered
+        return s;
     }
+
+    s.autoPreampGainL = std::pow(10.0f, profile.defaultPreampLeftDb / 20.0f);
+    s.autoPreampGainR = std::pow(10.0f, (profile.hasIndependentLR ? profile.defaultPreampRightDb : profile.defaultPreampLeftDb) / 20.0f);
+
+    const auto& rightBands = profile.hasIndependentLR ? profile.bandsRight : profile.bandsLeft;
+    s.numBandsL = static_cast<int>(std::min<size_t>(MaxBands, profile.bandsLeft.size()));
+    s.numBandsR = static_cast<int>(std::min<size_t>(MaxBands, rightBands.size()));
+    for (int i = 0; i < s.numBandsL; ++i) {
+        s.coeffsL[static_cast<size_t>(i)] = calculateBiquadCoeffs(profile.bandsLeft[static_cast<size_t>(i)], currentSampleRate);
+    }
+    for (int i = 0; i < s.numBandsR; ++i) {
+        s.coeffsR[static_cast<size_t>(i)] = calculateBiquadCoeffs(rightBands[static_cast<size_t>(i)], currentSampleRate);
+    }
+    return s;
 }
 
 void HeadphoneCalibration::prepare(double sampleRate, int maxBlockSize) {
     currentSampleRate = (sampleRate > 0.0) ? sampleRate : 48000.0;
     maxBlockSizeSamples = (maxBlockSize > 0) ? maxBlockSize : 512;
+    gainSmoothingCoeff = 1.0f / static_cast<float>(std::max(128.0, currentSampleRate * 0.02)); // about 20 ms
+
+    // Everything that allocates or computes filter coefficients happens here, never on the audio thread
     bundledProfiles = getBundledProfiles();
+    table.clear();
+    table.reserve(bundledProfiles.size());
+    for (int i = 0; i < static_cast<int>(bundledProfiles.size()); ++i) {
+        table.push_back(makeTableEntry(i));
+    }
 
-    // Reset crossfading state and filter banks
-    banks[0].reset();
-    banks[1].reset();
-    isCrossfading = false;
-    crossfadeProgress = 0.0f;
-    // Set crossfade duration to ~512 samples (~10.7ms at 48kHz)
-    crossfadeStep = 1.0f / static_cast<float>(std::max(128, maxBlockSizeSamples));
-    gainSmoothingCoeff = 1.0f / static_cast<float>(std::max(128, static_cast<int>(currentSampleRate * 0.02))); // ~20ms
-
-    // Deterministically prepare and activate initial profile state
-    prepareAndPublishState(lastPreparedProfileIndex, lastPreparedEnabled, lastPreparedAutoPreamp, lastPreparedManualGainDb);
-
-    // Immediately load into active bank so initial audio passes immediately
-    int readIdx = sharedIndex.load(std::memory_order_acquire);
-    banks[activeBank].state = statePool[readIdx];
-    banks[activeBank].currentPreampL = statePool[readIdx].targetPreampGainL;
-    banks[activeBank].currentPreampR = statePool[readIdx].targetPreampGainR;
-    banks[activeBank].reset();
+    reset();
+    const uint64_t current = requested.load(std::memory_order_acquire);
+    buildBank(banks[activeBank], unpackRequest(current), nullptr);
+    applied = current; // the initial bank already matches the request, so no crossfade at start
 }
 
-void HeadphoneCalibration::reset() {
+void HeadphoneCalibration::reset() noexcept {
     banks[0].reset();
     banks[1].reset();
     isCrossfading = false;
     crossfadeProgress = 0.0f;
+}
+
+void HeadphoneCalibration::requestState(int profileIndex, bool enabled, bool autoPreamp, float manualGainDb) noexcept {
+    requested.store(packRequest(Request{profileIndex, enabled, autoPreamp, manualGainDb}), std::memory_order_release);
+}
+
+void HeadphoneCalibration::requestStateById(const std::string& profileId, bool enabled, bool autoPreamp, float manualGainDb) {
+    requestState(getProfileIndexById(profileId), enabled, autoPreamp, manualGainDb);
+}
+
+void HeadphoneCalibration::buildBank(FilterBank& bank, const Request& req, const FilterBank* crossfadeFrom) noexcept {
+    if (table.empty()) return;
+
+    const int index = std::clamp(req.profileIndex, 0, static_cast<int>(table.size()) - 1);
+    const PreparedCalibrationState& base = table[static_cast<size_t>(index)];
+
+    // POD copy of the precomputed coefficients, then the request-dependent fields
+    bank.state = base;
+    bank.state.calibrationEnabled = req.enabled;
+
+    if (base.status != CalibrationStatus::VerifiedCalibrated) {
+        bank.state.targetPreampGainL = 1.0f;
+        bank.state.targetPreampGainR = 1.0f;
+    } else if (req.autoPreamp) {
+        bank.state.targetPreampGainL = base.autoPreampGainL;
+        bank.state.targetPreampGainR = base.autoPreampGainR;
+    } else {
+        const float manual = std::pow(10.0f, req.manualGainDb / 20.0f);
+        bank.state.targetPreampGainL = manual;
+        bank.state.targetPreampGainR = manual;
+    }
+
+    bank.reset();
+    if (crossfadeFrom != nullptr) {
+        bank.currentPreampL = crossfadeFrom->currentPreampL; // smooth from where the old bank is
+        bank.currentPreampR = crossfadeFrom->currentPreampR;
+    } else {
+        bank.currentPreampL = bank.state.targetPreampGainL; // snap on initial load
+        bank.currentPreampR = bank.state.targetPreampGainR;
+    }
+}
+
+void HeadphoneCalibration::process(float* leftChannel, float* rightChannel, int numSamples) noexcept {
+    if (numSamples <= 0 || leftChannel == nullptr || rightChannel == nullptr) return;
+
+    // A new request is only taken up while no fade is running, so a fade is never cut short
+    if (!isCrossfading) {
+        const uint64_t current = requested.load(std::memory_order_acquire);
+        if (current != applied) {
+            applied = current;
+            pendingBank = 1 - activeBank;
+            buildBank(banks[pendingBank], unpackRequest(current), &banks[activeBank]);
+            isCrossfading = true;
+            crossfadeProgress = 0.0f;
+        }
+    }
+
+    for (int n = 0; n < numSamples; ++n) {
+        if (isCrossfading) {
+            float oldL = 0.0f, oldR = 0.0f;
+            float newL = 0.0f, newR = 0.0f;
+            banks[activeBank].process(leftChannel[n], rightChannel[n], oldL, oldR, gainSmoothingCoeff);
+            banks[pendingBank].process(leftChannel[n], rightChannel[n], newL, newR, gainSmoothingCoeff);
+
+            const float alpha = crossfadeProgress;
+            leftChannel[n] = (1.0f - alpha) * oldL + alpha * newL;
+            rightChannel[n] = (1.0f - alpha) * oldR + alpha * newR;
+
+            crossfadeProgress += crossfadeStep;
+            if (crossfadeProgress >= 1.0f) {
+                isCrossfading = false;
+                activeBank = pendingBank;
+                crossfadeProgress = 0.0f;
+            }
+        } else {
+            float outL = 0.0f, outR = 0.0f;
+            banks[activeBank].process(leftChannel[n], rightChannel[n], outL, outR, gainSmoothingCoeff);
+            leftChannel[n] = outL;
+            rightChannel[n] = outR;
+        }
+    }
 }
 
 int HeadphoneCalibration::getProfileIndexById(const std::string& id) const {
@@ -430,158 +550,6 @@ std::string HeadphoneCalibration::getProfileIdByIndex(int index) const {
         return bundledProfiles[static_cast<size_t>(index)].id;
     }
     return "sennheiser_hd600";
-}
-
-void HeadphoneCalibration::prepareAndPublishStateById(const std::string& profileId, bool enabled, bool autoPreamp, float manualGainDb) {
-    int idx = getProfileIndexById(profileId);
-    prepareAndPublishState(idx, enabled, autoPreamp, manualGainDb);
-}
-
-void HeadphoneCalibration::prepareAndPublishState(int profileIdx, bool enabled, bool autoPreamp, float manualGainDb) {
-    if (bundledProfiles.empty()) {
-        bundledProfiles = getBundledProfiles();
-    }
-
-    int clampedIdx = std::clamp(profileIdx, 0, std::max(0, static_cast<int>(bundledProfiles.size()) - 1));
-    const auto& profile = bundledProfiles[static_cast<size_t>(clampedIdx)];
-
-    // Update tracking cache
-    lastPreparedProfileIndex = clampedIdx;
-    lastPreparedEnabled = enabled;
-    lastPreparedAutoPreamp = autoPreamp;
-    lastPreparedManualGainDb = manualGainDb;
-    currentProfile = profile;
-
-    // Prepare state in private write slot of triple buffer
-    PreparedCalibrationState& state = statePool[writeIndex];
-    std::snprintf(state.profileId, sizeof(state.profileId), "%s", profile.id.c_str());
-    state.profileIndex = clampedIdx;
-    state.status = profile.status;
-    state.calibrationEnabled = enabled;
-    state.hasIndependentLR = profile.hasIndependentLR;
-
-    // Calculate preamp targets
-    if (profile.status != CalibrationStatus::VerifiedCalibrated) {
-        // Pending or unverified models must NEVER attenuate or boost preamp (fixed 0 dBFS unity gain)
-        state.targetPreampGainL = 1.0f;
-        state.targetPreampGainR = 1.0f;
-        lastEffectivePreampLeftDb = 0.0f;
-        lastEffectivePreampRightDb = 0.0f;
-    } else if (autoPreamp) {
-        lastEffectivePreampLeftDb = profile.defaultPreampLeftDb;
-        lastEffectivePreampRightDb = profile.hasIndependentLR ? profile.defaultPreampRightDb : profile.defaultPreampLeftDb;
-        state.targetPreampGainL = std::pow(10.0f, lastEffectivePreampLeftDb / 20.0f);
-        state.targetPreampGainR = std::pow(10.0f, lastEffectivePreampRightDb / 20.0f);
-    } else {
-        lastEffectivePreampLeftDb = manualGainDb;
-        lastEffectivePreampRightDb = manualGainDb;
-        state.targetPreampGainL = std::pow(10.0f, manualGainDb / 20.0f);
-        state.targetPreampGainR = state.targetPreampGainL;
-    }
-
-    // Compute Left and Right Channel Biquads
-    if (profile.status != CalibrationStatus::VerifiedCalibrated) {
-        state.numBandsL = 0;
-        state.numBandsR = 0;
-        for (int i = 0; i < MaxBands; ++i) {
-            state.coeffsL[static_cast<size_t>(i)] = BiquadCoeffs{1.0f, 0.0f, 0.0f, 0.0f, 0.0f};
-            state.coeffsR[static_cast<size_t>(i)] = BiquadCoeffs{1.0f, 0.0f, 0.0f, 0.0f, 0.0f};
-        }
-    } else {
-        // Compute Left Channel Biquads
-        int numL = static_cast<int>(profile.bandsLeft.size());
-        state.numBandsL = std::min(MaxBands, numL);
-        for (int i = 0; i < state.numBandsL; ++i) {
-            state.coeffsL[static_cast<size_t>(i)] = calculateBiquadCoeffs(profile.bandsLeft[static_cast<size_t>(i)], currentSampleRate);
-        }
-        for (int i = state.numBandsL; i < MaxBands; ++i) {
-            state.coeffsL[static_cast<size_t>(i)] = BiquadCoeffs{1.0f, 0.0f, 0.0f, 0.0f, 0.0f};
-        }
-
-        // Compute Right Channel Biquads
-        const auto& rightBands = profile.hasIndependentLR ? profile.bandsRight : profile.bandsLeft;
-        int numR = static_cast<int>(rightBands.size());
-        state.numBandsR = std::min(MaxBands, numR);
-        for (int i = 0; i < state.numBandsR; ++i) {
-            state.coeffsR[static_cast<size_t>(i)] = calculateBiquadCoeffs(rightBands[static_cast<size_t>(i)], currentSampleRate);
-        }
-        for (int i = state.numBandsR; i < MaxBands; ++i) {
-            state.coeffsR[static_cast<size_t>(i)] = BiquadCoeffs{1.0f, 0.0f, 0.0f, 0.0f, 0.0f};
-        }
-    }
-
-    // Atomically publish into shared slot (zero locks, wait-free exchange)
-    int prevShared = sharedIndex.exchange(writeIndex, std::memory_order_acq_rel);
-    writeIndex = prevShared;
-    hasNewState.store(true, std::memory_order_release);
-}
-
-void HeadphoneCalibration::activateNewState(const PreparedCalibrationState& newState) noexcept {
-    pendingBank = 1 - activeBank;
-    banks[pendingBank].state = newState;
-    banks[pendingBank].currentPreampL = banks[activeBank].currentPreampL;
-    banks[pendingBank].currentPreampR = banks[activeBank].currentPreampR;
-    banks[pendingBank].reset();
-
-    isCrossfading = true;
-    crossfadeProgress = 0.0f;
-}
-
-void HeadphoneCalibration::process(float* leftChannel, float* rightChannel, int numSamples) noexcept {
-    if (numSamples <= 0 || leftChannel == nullptr || rightChannel == nullptr) return;
-
-    // Check if new prepared state has arrived from host/APVTS/UI thread
-    if (hasNewState.exchange(false, std::memory_order_acq_rel)) {
-        int newestShared = sharedIndex.exchange(readIndex, std::memory_order_acq_rel);
-        readIndex = newestShared;
-        activateNewState(statePool[readIndex]);
-    }
-
-    if (!isCrossfading) {
-        auto& bank = banks[activeBank];
-        for (int n = 0; n < numSamples; ++n) {
-            float outL = 0.0f, outR = 0.0f;
-            bank.process(leftChannel[n], rightChannel[n], outL, outR, gainSmoothingCoeff);
-            leftChannel[n] = outL;
-            rightChannel[n] = outR;
-        }
-    } else {
-        auto& oldBank = banks[activeBank];
-        auto& newBank = banks[pendingBank];
-
-        int n = 0;
-        for (; n < numSamples; ++n) {
-            float oldL = 0.0f, oldR = 0.0f;
-            float newL = 0.0f, newR = 0.0f;
-
-            oldBank.process(leftChannel[n], rightChannel[n], oldL, oldR, gainSmoothingCoeff);
-            newBank.process(leftChannel[n], rightChannel[n], newL, newR, gainSmoothingCoeff);
-
-            float alpha = crossfadeProgress;
-            leftChannel[n] = (1.0f - alpha) * oldL + alpha * newL;
-            rightChannel[n] = (1.0f - alpha) * oldR + alpha * newR;
-
-            crossfadeProgress += crossfadeStep;
-            if (crossfadeProgress >= 1.0f) {
-                isCrossfading = false;
-                activeBank = pendingBank;
-                pendingBank = 1 - activeBank;
-                ++n;
-                break;
-            }
-        }
-
-        // Process any remaining samples in the block through the newly active bank
-        if (!isCrossfading && n < numSamples) {
-            auto& bank = banks[activeBank];
-            for (; n < numSamples; ++n) {
-                float outL = 0.0f, outR = 0.0f;
-                bank.process(leftChannel[n], rightChannel[n], outL, outR, gainSmoothingCoeff);
-                leftChannel[n] = outL;
-                rightChannel[n] = outR;
-            }
-        }
-    }
 }
 
 } // namespace fieldroom

@@ -1,6 +1,8 @@
 #pragma once
 
+#include <atomic>
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_dsp/juce_dsp.h>
 #include "Parameters/Parameters.h"
 #include "DSP/BinauralRenderer.h"
 #include "DSP/RoomEngine.h"
@@ -9,11 +11,18 @@
 
 namespace fieldroom {
 
-class FieldroomAudioProcessor : public juce::AudioProcessor,
-                                public juce::AudioProcessorValueTreeState::Listener {
+/**
+ * Signal chain (stereo, per sample block):
+ *
+ *   input -> [spatial: binaural loudspeaker matrix -> room] --(blend with EQ-only dry path)-->
+ *         -> headphone calibration -> monitoring (routing, swap, DIM, trim, meters) -> output limiter
+ *
+ * Master bypass passes the input through untouched and keeps only the meters running.
+ */
+class FieldroomAudioProcessor : public juce::AudioProcessor {
 public:
     FieldroomAudioProcessor();
-    ~FieldroomAudioProcessor() override;
+    ~FieldroomAudioProcessor() override = default;
 
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
@@ -22,6 +31,9 @@ public:
 
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override { return true; }
+
+    // Host bypass button drives the same parameter as the in-plugin bypass
+    juce::AudioProcessorParameter* getBypassParameter() const override;
 
     const juce::String getName() const override { return "FIELDROOM"; }
     bool acceptsMidi() const override { return false; }
@@ -39,26 +51,29 @@ public:
     void setStateInformation(const void* data, int sizeInBytes) override;
 
     juce::AudioProcessorValueTreeState& getAPVTS() noexcept { return apvts; }
-    const MeterLevels& getMeterLevels() const noexcept { return currentMeters; }
 
-    HeadphoneCalibration& getCalibration() noexcept { return headphoneCalibration; }
+    // Snapshot of the latest metering values (safe to call from the UI thread)
+    MeterLevels getMeterLevels() const noexcept { return monitoringUtilities.getMeterLevels(); }
 
-    // APVTS Listener callback for off-audio-thread state preparation
-    void parameterChanged(const juce::String& parameterID, float newValue) override;
-    void updateCalibrationStateFromAPVTS();
+    double getCurrentSampleRate() const noexcept { return currentSampleRate.load(std::memory_order_relaxed); }
 
 private:
+    void processChunk(float* left, float* right, int numSamples) noexcept;
+
     juce::AudioProcessorValueTreeState apvts;
 
     BinauralRenderer binauralRenderer;
     RoomEngine roomEngine;
     HeadphoneCalibration headphoneCalibration;
     MonitoringUtilities monitoringUtilities;
+    juce::dsp::Limiter<float> outputLimiter;
 
-    // Intermediate scratch buffers for real-time safety
-    juce::AudioBuffer<float> roomScratchBuffer;
+    juce::AudioBuffer<float> dryBuffer;          // copy of the input, preallocated in prepareToPlay()
+    juce::SmoothedValue<float> spatialMix;       // 1 = virtual speakers, 0 = EQ-only dry path
+    int maxBlockSize{512};
+    bool wasBypassed{false};
 
-    MeterLevels currentMeters;
+    std::atomic<double> currentSampleRate{0.0};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(FieldroomAudioProcessor)
 };

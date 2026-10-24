@@ -10,10 +10,8 @@ MonitoringUtilities::MonitoringUtilities() {
 
 void MonitoringUtilities::prepare(double sampleRate, int maxBlockSize) {
     juce::ignoreUnused(maxBlockSize);
-    currentSampleRate = sampleRate;
-
-    trimSmoother.reset(sampleRate, 0.02); // 20ms ramp
-    dimSmoother.reset(sampleRate, 0.03);  // 30ms click-free DIM transition
+    trimSmoother.reset(sampleRate, 0.02); // 20 ms ramp
+    dimSmoother.reset(sampleRate, 0.03);  // 30 ms click-free DIM transition
 
     reset();
 }
@@ -22,8 +20,16 @@ void MonitoringUtilities::reset() {
     sumSquaresL = 0.0f;
     sumSquaresR = 0.0f;
     sumDotProduct = 0.0f;
+    windowPeakL = 0.0f;
+    windowPeakR = 0.0f;
     meterSampleCount = 0;
-    currentLevels = MeterLevels{};
+
+    publishedPeakLDb.store(-100.0f, std::memory_order_relaxed);
+    publishedPeakRDb.store(-100.0f, std::memory_order_relaxed);
+    publishedRmsLDb.store(-100.0f, std::memory_order_relaxed);
+    publishedRmsRDb.store(-100.0f, std::memory_order_relaxed);
+    publishedCorrelation.store(1.0f, std::memory_order_relaxed);
+    publishedClipping.store(false, std::memory_order_relaxed);
 }
 
 void MonitoringUtilities::setMode(MonitoringMode mode) {
@@ -35,108 +41,127 @@ void MonitoringUtilities::setSwap(bool enabled) {
 }
 
 void MonitoringUtilities::setDim(bool enabled) {
+    if (dimActive == enabled) return;
     dimActive = enabled;
-    // -18 dB dim factor = 0.12589
-    float target = dimActive ? std::pow(10.0f, -18.0f / 20.0f) : 1.0f;
+    // -18 dB DIM factor
+    const float target = dimActive ? std::pow(10.0f, -18.0f / 20.0f) : 1.0f;
     dimSmoother.setTargetValue(target);
 }
 
 void MonitoringUtilities::setOutputTrim(float trimDb) {
-    currentTrimDb = trimDb;
-    float target = std::pow(10.0f, currentTrimDb / 20.0f);
-    trimSmoother.setTargetValue(target);
+    trimSmoother.setTargetValue(std::pow(10.0f, trimDb / 20.0f));
 }
 
 void MonitoringUtilities::process(float* left, float* right, int numSamples) {
     if (numSamples <= 0) return;
 
-    float peakL = 0.0f;
-    float peakR = 0.0f;
-
     for (int n = 0; n < numSamples; ++n) {
         float l = left[n];
         float r = right[n];
 
-        // 1. Channel Audition Routing Modes (Mutually exclusive)
+        // 1. Audition routing (mutually exclusive)
         switch (currentMode) {
             case MonitoringMode::Mono: {
-                // True Mono with -3dB pan-law compensation (gain 1/sqrt(2) = ~0.7071)
-                float mono = (l + r) * 0.70710678f;
+                // Mono fold-down as (L + R) / 2: a centred source keeps its level, so the check is level-neutral
+                const float mono = (l + r) * 0.5f;
                 l = mono;
                 r = mono;
                 break;
             }
             case MonitoringMode::Side: {
-                // Side / Difference audition: (L - R) / 2
-                float side = (l - r) * 0.5f;
+                // Side / difference audition: (L - R) / 2, kept out of phase for externalisation
+                const float side = (l - r) * 0.5f;
                 l = side;
-                r = -side; // Preserves out-of-phase acoustic externalization
+                r = -side;
                 break;
             }
-            case MonitoringMode::LeftSolo: {
-                // Left channel to both ears for phantom center inspection
+            case MonitoringMode::LeftSolo:
                 r = l;
                 break;
-            }
-            case MonitoringMode::RightSolo: {
-                // Right channel to both ears
+            case MonitoringMode::RightSolo:
                 l = r;
                 break;
-            }
             case MonitoringMode::Normal:
             default:
                 break;
         }
 
-        // 2. Independent L/R Channel Swap
+        // 2. Independent L/R swap
         if (swapActive) {
             std::swap(l, r);
         }
 
-        // 3. Apply Output Trim and DIM
-        float trim = trimSmoother.getNextValue();
-        float dim = dimSmoother.getNextValue();
-        l *= trim * dim;
-        r *= trim * dim;
+        // 3. Output trim and DIM
+        const float gain = trimSmoother.getNextValue() * dimSmoother.getNextValue();
+        l *= gain;
+        r *= gain;
 
         left[n] = l;
         right[n] = r;
 
-        // 4. Metering Accumulation
-        float absL = std::abs(l);
-        float absR = std::abs(r);
-        if (absL > peakL) peakL = absL;
-        if (absR > peakR) peakR = absR;
-
-        sumSquaresL += l * l;
-        sumSquaresR += r * r;
-        sumDotProduct += l * r;
-        meterSampleCount++;
+        accumulateMeters(l, r);
     }
 
-    // Update Meter Levels roughly every block or ~512 samples
-    if (meterSampleCount >= 512) {
-        float rmsL = std::sqrt(sumSquaresL / static_cast<float>(meterSampleCount));
-        float rmsR = std::sqrt(sumSquaresR / static_cast<float>(meterSampleCount));
+    publishMetersIfWindowFull();
+}
 
-        currentLevels.peakLeftDb = (peakL > 1e-5f) ? (20.0f * std::log10(peakL)) : -100.0f;
-        currentLevels.peakRightDb = (peakR > 1e-5f) ? (20.0f * std::log10(peakR)) : -100.0f;
-        currentLevels.rmsLeftDb = (rmsL > 1e-5f) ? (20.0f * std::log10(rmsL)) : -100.0f;
-        currentLevels.rmsRightDb = (rmsR > 1e-5f) ? (20.0f * std::log10(rmsR)) : -100.0f;
+void MonitoringUtilities::measure(const float* left, const float* right, int numSamples) {
+    if (numSamples <= 0) return;
 
-        float denom = std::sqrt(sumSquaresL * sumSquaresR);
-        if (denom > 1e-6f) {
-            currentLevels.correlation = juce::jlimit(-1.0f, 1.0f, sumDotProduct / denom);
-        } else {
-            currentLevels.correlation = 1.0f;
-        }
-        currentLevels.isClipping = (peakL >= 1.0f || peakR >= 1.0f);
-
-        sumSquaresL = 0.0f;
-        sumSquaresR = 0.0f;
-        sumDotProduct = 0.0f;
-        meterSampleCount = 0;
+    for (int n = 0; n < numSamples; ++n) {
+        accumulateMeters(left[n], right[n]);
     }
+
+    publishMetersIfWindowFull();
+}
+
+void MonitoringUtilities::accumulateMeters(float l, float r) noexcept {
+    // Peaks are held across every block of the window, not only the block that closes it
+    windowPeakL = std::max(windowPeakL, std::abs(l));
+    windowPeakR = std::max(windowPeakR, std::abs(r));
+
+    sumSquaresL += l * l;
+    sumSquaresR += r * r;
+    sumDotProduct += l * r;
+    meterSampleCount++;
+}
+
+void MonitoringUtilities::publishMetersIfWindowFull() noexcept {
+    if (meterSampleCount < 512) return;
+
+    const float count = static_cast<float>(meterSampleCount);
+    const float rmsL = std::sqrt(sumSquaresL / count);
+    const float rmsR = std::sqrt(sumSquaresR / count);
+
+    auto toDb = [](float linear) { return (linear > 1e-5f) ? 20.0f * std::log10(linear) : -100.0f; };
+
+    publishedPeakLDb.store(toDb(windowPeakL), std::memory_order_relaxed);
+    publishedPeakRDb.store(toDb(windowPeakR), std::memory_order_relaxed);
+    publishedRmsLDb.store(toDb(rmsL), std::memory_order_relaxed);
+    publishedRmsRDb.store(toDb(rmsR), std::memory_order_relaxed);
+
+    const float denom = std::sqrt(sumSquaresL * sumSquaresR);
+    const float correlation = (denom > 1e-6f) ? juce::jlimit(-1.0f, 1.0f, sumDotProduct / denom) : 1.0f;
+    publishedCorrelation.store(correlation, std::memory_order_relaxed);
+    publishedClipping.store(windowPeakL >= 1.0f || windowPeakR >= 1.0f, std::memory_order_relaxed);
+
+    sumSquaresL = 0.0f;
+    sumSquaresR = 0.0f;
+    sumDotProduct = 0.0f;
+    windowPeakL = 0.0f;
+    windowPeakR = 0.0f;
+    meterSampleCount = 0;
+}
+
+MeterLevels MonitoringUtilities::getMeterLevels() const noexcept {
+    MeterLevels levels;
+    levels.peakLeftDb = publishedPeakLDb.load(std::memory_order_relaxed);
+    levels.peakRightDb = publishedPeakRDb.load(std::memory_order_relaxed);
+    levels.rmsLeftDb = publishedRmsLDb.load(std::memory_order_relaxed);
+    levels.rmsRightDb = publishedRmsRDb.load(std::memory_order_relaxed);
+    levels.correlation = publishedCorrelation.load(std::memory_order_relaxed);
+    levels.isClipping = publishedClipping.load(std::memory_order_relaxed);
+    return levels;
 }
 
 } // namespace fieldroom

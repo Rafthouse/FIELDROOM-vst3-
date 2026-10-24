@@ -95,4 +95,6 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build-windows.ps1
 ---
 
 ## 📜 Ліцензія
-MIT License. Всі алгоритми виконані відповідно до стандарту реального часу (Zero-Allocation Audio Thread, Real-Time Safe).
+GNU General Public License v3.0 (див. `LICENSES/LICENSE`). Copyright (c) 2026 FIELDROOM Audio Acoustics Lab.
+
+Проєкт використовує JUCE 7 під GPLv3, тому вбудований редакторний знак JUCE вимкнено (`JUCE_DISPLAY_SPLASH_SCREEN=0`). Всі алгоритми виконані відповідно до стандарту реального часу (Zero-Allocation Audio Thread, Real-Time Safe).

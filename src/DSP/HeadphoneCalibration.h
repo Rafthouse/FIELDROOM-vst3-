@@ -5,6 +5,7 @@
 #include <array>
 #include <atomic>
 #include <cmath>
+#include <cstdint>
 #include <juce_core/juce_core.h>
 
 namespace fieldroom {
@@ -91,19 +92,32 @@ struct BiquadState {
     }
 };
 
+/**
+ * Headphone correction (PEQ + automatic preamp) for the audio thread.
+ *
+ * Threading model:
+ *  - prepare() (message thread, before playback) builds one immutable PreparedCalibrationState per
+ *    bundled profile. Nothing is computed or allocated on the audio thread afterwards.
+ *  - requestState() (any thread) packs the whole request into one 64-bit atomic. Reads and writes are
+ *    therefore always consistent, with no locks and no allocation.
+ *  - process() (audio thread) picks up a changed request at a block boundary, builds it into the idle
+ *    filter bank from the table, and crossfades to it. A new request arriving mid-fade is applied after
+ *    that fade completes, so a fade is never interrupted.
+ */
 class HeadphoneCalibration {
 public:
     static constexpr int MaxBands = 10;
 
-    // Fully self-contained, fixed-size POD struct for real-time safety (no heap allocations)
+    // Fixed-size POD: copying it into a filter bank never allocates
     struct PreparedCalibrationState {
-        char profileId[64]{0};
         int profileIndex{-1};
         CalibrationStatus status{CalibrationStatus::UncalibratedRaw};
         bool calibrationEnabled{true};
         bool hasIndependentLR{false};
-        float targetPreampGainL{1.0f}; // linear gain
-        float targetPreampGainR{1.0f}; // linear gain
+        float autoPreampGainL{1.0f}; // linear, from the profile's default preamp
+        float autoPreampGainR{1.0f};
+        float targetPreampGainL{1.0f}; // linear, applied for the current request
+        float targetPreampGainR{1.0f};
         int numBandsL{0};
         int numBandsR{0};
         std::array<BiquadCoeffs, MaxBands> coeffsL{};
@@ -149,62 +163,57 @@ public:
     };
 
     HeadphoneCalibration();
-    ~HeadphoneCalibration() = default;
 
+    // Message thread, before playback: builds the profile table and the initial filter bank
     void prepare(double sampleRate, int maxBlockSize);
-    void reset();
+    void reset() noexcept;
 
-    // Configuration methods intended to be called OUTSIDE the audio thread (e.g. APVTS listener, UI, or prepareToPlay)
-    void prepareAndPublishState(int profileIdx, bool enabled, bool autoPreamp, float manualGainDb);
-    void prepareAndPublishStateById(const std::string& profileId, bool enabled, bool autoPreamp, float manualGainDb);
+    // Any thread: lock-free request, applied by process() at the next idle moment
+    void requestState(int profileIndex, bool enabled, bool autoPreamp, float manualGainDb) noexcept;
+    void requestStateById(const std::string& profileId, bool enabled, bool autoPreamp, float manualGainDb);
 
-    // Real-time audio thread callback (deterministic O(N), zero locks, zero allocations)
+    // Audio thread: real-time safe, no allocation, no locks
     void process(float* leftChannel, float* rightChannel, int numSamples) noexcept;
 
     static std::vector<HeadphoneProfile> getBundledProfiles();
     static float calculateAutoPreamp(const std::vector<BiquadBandConfig>& bands);
     static BiquadCoeffs calculateBiquadCoeffs(const BiquadBandConfig& band, double sampleRate);
 
-    const HeadphoneProfile& getCurrentProfile() const noexcept { return currentProfile; }
-    int getCurrentProfileIndex() const noexcept { return lastPreparedProfileIndex; }
-    bool isEnabled() const noexcept { return lastPreparedEnabled; }
-    float getEffectivePreampLeftDb() const noexcept { return lastEffectivePreampLeftDb; }
-    float getEffectivePreampRightDb() const noexcept { return lastEffectivePreampRightDb; }
-
     int getProfileIndexById(const std::string& id) const;
     std::string getProfileIdByIndex(int index) const;
 
 private:
+    struct Request {
+        int profileIndex{0};
+        bool enabled{true};
+        bool autoPreamp{true};
+        float manualGainDb{0.0f};
+    };
+
+    static uint64_t packRequest(const Request& r) noexcept;
+    static Request unpackRequest(uint64_t packed) noexcept;
+
+    PreparedCalibrationState makeTableEntry(int profileIndex) const;
+    void buildBank(FilterBank& bank, const Request& req, const FilterBank* crossfadeFrom) noexcept;
+
+    static constexpr int CrossfadeSamples = 512; // ~10.7 ms at 48 kHz
+
+    std::vector<HeadphoneProfile> bundledProfiles;   // message thread metadata
+    std::vector<PreparedCalibrationState> table;      // immutable after prepare()
+
+    std::atomic<uint64_t> requested{0};              // written by any thread
+    uint64_t applied{0};                             // audio thread only
+
     double currentSampleRate{48000.0};
     int maxBlockSizeSamples{512};
-    std::vector<HeadphoneProfile> bundledProfiles;
-    HeadphoneProfile currentProfile;
 
-    // Cache of last prepared parameters for quick retrieval
-    int lastPreparedProfileIndex{0};
-    bool lastPreparedEnabled{true};
-    bool lastPreparedAutoPreamp{true};
-    float lastPreparedManualGainDb{0.0f};
-    float lastEffectivePreampLeftDb{0.0f};
-    float lastEffectivePreampRightDb{0.0f};
-
-    // Lock-free Triple Buffer for asynchronous state publication
-    PreparedCalibrationState statePool[3]{};
-    int writeIndex{2};
-    std::atomic<int> sharedIndex{1};
-    int readIndex{0};
-    std::atomic<bool> hasNewState{false};
-
-    // Dual-bank crossfading system for click-free switching on the audio thread
     FilterBank banks[2]{};
     int activeBank{0};
     int pendingBank{1};
     bool isCrossfading{false};
     float crossfadeProgress{0.0f};
-    float crossfadeStep{0.002f}; // ~500 samples crossfade (~10.4ms at 48kHz)
+    float crossfadeStep{1.0f / static_cast<float>(CrossfadeSamples)};
     float gainSmoothingCoeff{0.005f}; // Smooth preamp transitions
-
-    void activateNewState(const PreparedCalibrationState& newState) noexcept;
 };
 
 } // namespace fieldroom

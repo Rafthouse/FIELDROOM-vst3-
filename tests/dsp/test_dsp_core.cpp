@@ -81,19 +81,19 @@ int main() {
         }
     }
 
-    // Test 4: Monitoring Utilities - True Mono pan law (-3dB)
+    // Test 4: Monitoring Utilities - Mono fold-down is level-neutral for a centred source, (L + R) / 2
     {
         total++;
         MonitoringUtilities utils;
         utils.prepare(48000.0, 512);
         utils.setMode(MonitoringMode::Mono);
 
-        float singleL = 1.0f, singleR = 0.0f;
-        utils.process(&singleL, &singleR, 1);
+        float centreL = 1.0f, centreR = 1.0f;
+        utils.process(&centreL, &centreR, 1);
 
-        std::cout << "[DSP-04] Testing True Mono Pan Law: single channel in = 1.0 -> out = " << singleL << " ... ";
-        if (std::abs(singleL - 0.70710678f) < 0.01f) {
-            std::cout << "PASS (-3.01 dB)\n";
+        std::cout << "[DSP-04] Testing Mono fold-down: centred in = 1.0 -> out = " << centreL << " ... ";
+        if (std::abs(centreL - 1.0f) < 1e-6f && std::abs(centreR - 1.0f) < 1e-6f) {
+            std::cout << "PASS (0 dB for centre)\n";
             passed++;
         } else {
             std::cout << "FAIL\n";
@@ -190,7 +190,7 @@ int main() {
         int aliasIdx = cal.getProfileIndexById("vmoda_m200");
         bool aliasMatches = (wiredIdx == aliasIdx);
 
-        cal.prepareAndPublishStateById("vmoda_m200_wired", true, true, 0.0f);
+        cal.requestStateById("vmoda_m200_wired", true, true, 0.0f);
 
         std::vector<float> testL(512, 0.5f);
         std::vector<float> testR(512, -0.5f);
@@ -212,18 +212,18 @@ int main() {
     // Test 8: Real-Time Safe Lock-Free Triple Buffer & Click-Free Crossfade
     {
         total++;
-        std::cout << "[DSP-08] Testing Lock-Free Triple Buffer & Click-Free Switching ... ";
+        std::cout << "[DSP-08] Testing Lock-Free Request & Click-Free Switching ... ";
         HeadphoneCalibration cal;
         cal.prepare(48000.0, 512);
 
         // Start with HD 600
-        cal.prepareAndPublishStateById("sennheiser_hd600", true, true, 0.0f);
+        cal.requestStateById("sennheiser_hd600", true, true, 0.0f);
         std::vector<float> bufL(512, 0.25f);
         std::vector<float> bufR(512, 0.25f);
         cal.process(bufL.data(), bufR.data(), 512);
 
         // Switch to DT 770 Pro during active streaming
-        cal.prepareAndPublishStateById("beyer_dt770_80", true, true, 0.0f);
+        cal.requestStateById("beyer_dt770_80", true, true, 0.0f);
 
         bool glitchFree = true;
         for (int b = 0; b < 10; ++b) {
@@ -244,6 +244,56 @@ int main() {
             passed++;
         } else {
             std::cout << "FAIL (Crossfading glitch or instability detected)\n";
+        }
+    }
+
+    // Test 9: Meter window keeps the peak of every block, not only the block that closes the window
+    {
+        total++;
+        MonitoringUtilities utils;
+        utils.prepare(48000.0, 64);
+
+        // Eight 64-sample blocks make one 512-sample window; only the first block carries a 0.9 peak
+        std::vector<float> l(64, 0.0f);
+        std::vector<float> r(64, 0.0f);
+        l[10] = 0.9f;
+        utils.process(l.data(), r.data(), 64);
+        std::fill(l.begin(), l.end(), 0.0f);
+        for (int b = 1; b < 8; ++b) {
+            utils.process(l.data(), r.data(), 64);
+        }
+
+        float peakDb = utils.getMeterLevels().peakLeftDb;
+        std::cout << "[DSP-09] Testing meter peak hold across small blocks: peakL = " << peakDb << " dB ... ";
+        if (std::abs(peakDb - 20.0f * std::log10(0.9f)) < 0.05f) {
+            std::cout << "PASS\n";
+            passed++;
+        } else {
+            std::cout << "FAIL\n";
+        }
+    }
+
+    // Test 10: Metering-only path leaves the audio untouched while still reporting levels
+    {
+        total++;
+        MonitoringUtilities utils;
+        utils.prepare(48000.0, 64);
+        utils.setMode(MonitoringMode::Mono);
+        utils.setDim(true);
+
+        std::vector<float> l(512, 0.5f);
+        std::vector<float> r(512, -0.25f);
+        utils.measure(l.data(), r.data(), 512);
+
+        bool untouched = std::all_of(l.begin(), l.end(), [](float s) { return s == 0.5f; })
+                      && std::all_of(r.begin(), r.end(), [](float s) { return s == -0.25f; });
+        float peakDb = utils.getMeterLevels().peakLeftDb;
+        std::cout << "[DSP-10] Testing bypass metering leaves audio untouched: peakL = " << peakDb << " dB ... ";
+        if (untouched && std::abs(peakDb - 20.0f * std::log10(0.5f)) < 0.05f) {
+            std::cout << "PASS\n";
+            passed++;
+        } else {
+            std::cout << "FAIL\n";
         }
     }
 

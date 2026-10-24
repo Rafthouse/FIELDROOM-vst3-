@@ -16,9 +16,14 @@ struct RoomAcousticParameters {
     float roomWidthMeters;
     float roomLengthMeters;
     float roomHeightMeters;
-    float defaultDrrDb;
 };
 
+/**
+ * Early reflections plus an 8-line Feedback Delay Network (Householder mixing) for the late tail.
+ *
+ * Every delay line is a power-of-two ring buffer sized in prepare(), so process() never allocates
+ * and wrap-around is a bit mask instead of a modulo.
+ */
 class RoomEngine {
 public:
     static constexpr int NumDelays = 8;
@@ -41,26 +46,33 @@ public:
 
     static RoomAcousticParameters getRoomParameters(int profileIndex) noexcept;
 
+    // RT60 actually rendered for a room/field pair (includes the speaker-field scale)
+    static float getEffectiveRt60(int profileIndex, int fieldIndex) noexcept;
+
 private:
+    static constexpr int MaxEarlySamples = 8192; // early taps are at most ~20 ms; 8192 covers 192 kHz with margin
+
+    void updateFdnCoefficients();
+
     double currentSampleRate{48000.0};
     int currentProfile{2};
     float currentRoomAmount{0.5f};
     int currentField{1};
 
-    // Feedback Delay Network State
+    // Feedback Delay Network state (each line is a power-of-two ring, see prepare())
     std::array<std::vector<float>, NumDelays> delayBuffers;
+    std::array<int, NumDelays> delayMasks{{0}};
     std::array<int, NumDelays> writePointers{{0}};
     std::array<int, NumDelays> delayLengthsInSamples{{0}};
     std::array<float, NumDelays> feedbackGains{{0.0f}};
     std::array<float, NumDelays> onePoleLowpassState{{0.0f}};
 
-    // Early Reflection Delay Lines
-    std::vector<float> erBufferLeft;
-    std::vector<float> erBufferRight;
+    // Early reflection delay lines (shared ring, power-of-two)
+    std::array<float, MaxEarlySamples> erBufferLeft{};
+    std::array<float, MaxEarlySamples> erBufferRight{};
     int erWritePos{0};
 
     juce::SmoothedValue<float> wetMixSmoother;
-    void updateFdnCoefficients();
 };
 
 } // namespace fieldroom
